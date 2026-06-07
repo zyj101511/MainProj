@@ -1,2 +1,0 @@
-#!/usr/bin/env bash
-python3 /home/yanjiezhang/Downloads/Dissertation/v2e/v2e.py -i ./raw.mp4 --overwrite --timestamp_resolution=0.005 --auto_timestamp_resolution=False --dvs_exposure duration 0.033 --no_preview --output_folder=v2e_output/ --pos_thres=0.15 --neg_thres=0.15 --sigma_thres=0.03 --dvs_aedat2 dvs.aedat --dvs346 --cutoff_hz=15 --vid_orig None --batch_size 32
