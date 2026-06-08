@@ -1,5 +1,6 @@
 import subprocess
 import os
+import argparse
 from glob import glob
 from pathlib import Path
 from tqdm import tqdm
@@ -9,7 +10,7 @@ from preprocessing.settings.local import EnvironmentSettings
 script_dir = Path(__file__).resolve().parents[1] / "scripts"
 script_path = script_dir / "cvt_FE108_mp4_to_aedat4.sh"
 
-def processing(mp4_dir):  # 传入数据集目录
+def main(mp4_dir):  # 传入数据集目录
     log_dir = Path(__file__).resolve().parents[1] / "logs"  # log目录
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -36,4 +37,4 @@ def processing(mp4_dir):  # 传入数据集目录
 if __name__ == "__main__":
     EnvSettings = EnvironmentSettings()
     mp4_dir = EnvSettings.v2e_data_path
-    processing(mp4_dir)
+    main(mp4_dir)
