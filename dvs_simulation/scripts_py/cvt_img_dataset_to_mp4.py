@@ -9,7 +9,7 @@ parser = argparse.ArgumentParser(description='')
 parser.add_argument('--img_dir', required=True, help='path to the original dataset')
 parser.add_argument('--mp4_dir', required=True, help='output path of the mp4 files')
 parser.add_argument('--fps', required=True, type=int, help='the fps of the output mp4 filde')
-parser.add_argument('--format', required=True, type=str, default='jpg', help='image format')
+parser.add_argument('--format', type=str, default='jpg', help='image format')
 
 
 def cvt_jpg_to_mp4(img_paths, out_path, fps, folder_info):

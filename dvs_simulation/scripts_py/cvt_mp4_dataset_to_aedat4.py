@@ -1,14 +1,13 @@
 import subprocess
 import os
-import argparse
 from glob import glob
 from pathlib import Path
 from tqdm import tqdm
-from preprocessing.settings.local import EnvironmentSettings
+from dvs_simulation.settings.local import EnvironmentSettings
 
 
 script_dir = Path(__file__).resolve().parents[1] / "scripts"
-script_path = script_dir / "cvt_FE108_mp4_to_aedat4.sh"
+script_path = script_dir / "_FE108_v2e.sh"
 
 def main(mp4_dir):  # 传入数据集目录
     log_dir = Path(__file__).resolve().parents[1] / "logs"  # log目录
@@ -26,12 +25,12 @@ def main(mp4_dir):  # 传入数据集目录
 
     all_roots = []
     for root, dirs, files in os.walk(mp4_dir):  # 递归遍历数据集
-        if glob(os.path.join(root, "raw.mp4")):  # 如果当前目录下有raw.mp4, 保存当前路径
+        if glob(os.path.join(root, "*.mp4")):  # 如果当前目录下有mp4文件, 保存当前路径
             all_roots.append(root)
 
     with open(log_path, "a") as f:
         for idx, root in enumerate(tqdm(all_roots, desc="Converting mp4 to aedat2"), 1):
-            # 转换raw.mp4
+            # 转换mp4
             subprocess.run(["bash", str(script_path)], cwd=str(root), check=True, stdout=f, stderr=subprocess.STDOUT)
 
 if __name__ == "__main__":
