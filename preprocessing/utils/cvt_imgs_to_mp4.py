@@ -5,6 +5,13 @@ from glob import glob
 from tqdm import tqdm
 
 
+parser = argparse.ArgumentParser(description='')
+parser.add_argument('--img_dir', required=True, help='path to the original dataset')
+parser.add_argument('--mp4_dir', required=True, help='output path of the mp4 files')
+parser.add_argument('--fps', required=True, type=int, help='the fps of the output mp4 filde')
+parser.add_argument('--format', required=True, type=str, default='jpg', help='image format')
+
+
 def cvt_jpg_to_mp4(img_paths, out_path, fps, folder_info):
     first_frame = cv2.imread(img_paths[0])
     h, w = first_frame.shape[:2]
@@ -36,11 +43,6 @@ def processing(img_dir, mp4_dir, fps, img_format):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--img_dir', required=True, help='path to the original dataset')
-    parser.add_argument('--mp4_dir', required=True, help='output path of the mp4 files')
-    parser.add_argument('--fps', required=True, type=int, help='the fps of the output mp4 filde')
-    parser.add_argument('--format', required=True, type=str, default='jpg', help='image format')
     args = parser.parse_args()
     processing(args.img_dir, args.mp4_dir, args.fps, args.format)
 
