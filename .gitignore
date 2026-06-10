@@ -1,0 +1,14 @@
+.idea/
+.venv/
+*.safetensors
+*.bin
+*.pt
+*.pth
+.DS_Store
+._*
+__pycache__
+output/
+logs/
+test.py
+.Ds_Store/
+
