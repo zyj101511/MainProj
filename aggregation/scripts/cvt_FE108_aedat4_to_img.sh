@@ -1,2 +1,0 @@
-cd /home/yanjiezhang/Downloads/Dissertation/MainProj
-python3 -m aggregation.scripts_py.cvt_aedat4_dataset_to_img -d /media/yanjiezhang/ian/dataset/FE108_raw -c -o /media/yanjiezhang/ian/dataset/FE108_raw_aedat4_to_imgs
