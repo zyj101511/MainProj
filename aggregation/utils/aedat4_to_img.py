@@ -4,6 +4,7 @@ import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 from dv import AedatFile
+from aggregation.utils.general import clip_events, unique_dir, get_offset
 
 '''
 def _make_color_img(events, width, height):
@@ -65,7 +66,7 @@ def _make_color_img(events, width, height):
     return canvas
 
 
-def aedat4_to_img_events(aedat_path, event_num, out_dir, width, height):
+def aedat4_to_img_events(aedat_path, event_num, out_dir, folder_name='imgs_events', width=346, height=260):
     """
     Aggregate events from aedat4 to img per fixed events window
     """
@@ -76,10 +77,11 @@ def aedat4_to_img_events(aedat_path, event_num, out_dir, width, height):
         frame_idx = 0
 
         output_dir = Path(out_dir)
-        output_dir.mkdir(exist_ok=True)
+        output_dir.mkdir(exist_ok=True, parents=True)
 
-        img_dir = output_dir / 'aedat4_imgs_events'  # 在当前目录创建输出图片的文件夹
-        img_dir.mkdir(exist_ok=True)
+        img_dir = output_dir / folder_name # 在当前目录创建输出图片的文件夹
+        img_dir = unique_dir(img_dir)
+        img_dir.mkdir(exist_ok=True, parents=True)
 
         # saving the frame_idxs and timestamps for frame images.
         ts_list = []
@@ -97,9 +99,10 @@ def aedat4_to_img_events(aedat_path, event_num, out_dir, width, height):
             ts_list.append([frame_idx, events['timestamp'][event_idx]])
 
         ts_df = pd.DataFrame(ts_list, columns=['frame_idx', 'timestamp'])
-        ts_df.to_csv(output_dir / 'aedat4_img_timestamp.csv', index=False)
+        ts_df.to_csv(output_dir / f'{folder_name}_timestamp.csv', index=False)
 
-def aedat4_to_img_time(aedat_path, duration, out_dir, width, height):
+
+def aedat4_to_img_time(aedat_path, duration, out_dir, folder_name='imgs_time', width=346, height=260):
     """
     Aggregate events from aedat4 to img per fixed time window (unit=micro seconds)
     """
@@ -110,29 +113,40 @@ def aedat4_to_img_time(aedat_path, duration, out_dir, width, height):
         frame_idx = 0
 
         output_dir = Path(out_dir)
-        output_dir.mkdir(exist_ok=True)
+        output_dir.mkdir(exist_ok=True, parents=True)
 
-        img_dir = output_dir / 'aedat4_imgs_time'  # 在当前目录创建输出图片的文件夹
-        img_dir.mkdir(exist_ok=True)
+        img_dir = output_dir / folder_name  # 在当前目录创建输出图片的文件夹
+        img_dir = unique_dir(img_dir)
+        img_dir.mkdir(exist_ok=True, parents=True)
 
         # saving the frame_idxs and timestamps for frame images.
         ts_list = []
 
         start_ts = events['timestamp'][0]
-        event_list = []
-        rec_list = []
         last_start = start_ts
-        for event in events:
+        start_idx = 0  # 当前时间窗口的起始event索引
+
+        for idx, event in enumerate(tqdm(events, leave=False, desc='Converting aedat4 to image by fixed time window')):
             # while处理跨多个时间窗口
             while event['timestamp'] >= duration + last_start:  # if timestamp exceeds the boundary, save the current batch
-                rec_list.append(np.array(event_list, dtype=events.dtype))
-                event_list = []
-                last_start += duration
-            event_list.append(event)
-        if event_list:  # 确保最后一批事件也被添加到 rec_list 中
-            rec_list.append(np.array(event_list, dtype=events.dtype))
+                rec_events = events[start_idx:idx]
 
-        for idx, rec_events in enumerate(tqdm(rec_list, leave=False, desc='Converting aedat4 to image by fixed time window')):
+                if len(rec_events) > 0:  # 确保当前批次非空
+                    event_img = _make_color_img(rec_events, width=width, height=height)
+                    frame_idx += 1
+
+                    img_path = img_dir / f'frame_{frame_idx:06d}.png'
+                    cv2.imwrite(str(img_path), event_img)
+                    # cv2.imshow('event_img', event_img)
+                    # cv2.waitKey(500)
+
+                    ts_list.append([frame_idx, rec_events[0]['timestamp']])
+
+                start_idx = idx
+                last_start += duration
+
+        if start_idx < len(events):  # 确保最后一批事件也被处理
+            rec_events = events[start_idx:]
             event_img = _make_color_img(rec_events, width=width, height=height)
             frame_idx += 1
 
@@ -144,86 +158,58 @@ def aedat4_to_img_time(aedat_path, duration, out_dir, width, height):
             ts_list.append([frame_idx, rec_events[0]['timestamp']])
 
         ts_df = pd.DataFrame(ts_list, columns=['frame_idx', 'timestamp'])
-        ts_df.to_csv(output_dir / 'aedat4_img_timestamp.csv', index=False)
+        ts_df.to_csv(output_dir / f'{folder_name}_timestamp.csv', index=False)
 
-def _clip_events(aedat_path, offset):
-    """
-    Clip events based on the frame timestamps
-    The time range is from the start of the first frame to the end of the last frame
-    """
-    start_frame = offset[aedat_path.parent.name]
-    # aedat中的frame比gt对应的frame更多,需要补偿偏移
-    frame_dir = aedat_path.parent/'img'
-    frame_num = len(list(frame_dir.iterdir()))
 
-    with AedatFile(str(aedat_path)) as f:
-        events = np.hstack([event for event in f['events'].numpy()])
-        frame_start_list = []
-        count = 0
-        for frame in f['frames']:
-            count += 1
-            if start_frame <= count <= start_frame + frame_num:  # 在gt对应范围内,记录每一帧起止时间
-                frame_start_list.append(frame.timestamp_start_of_frame)
-            else:
-                continue
-    # clipping
-    events = events[events['timestamp'] >= frame_start_list[0]]
-    events = events[events['timestamp'] < frame_start_list[-1]]  # 将events流裁切到gt对应的范围内
-    # frame_start_list长度是frame+1
-    return events, frame_start_list
-
-def aedat4_to_img_frame(aedat_path, offset_path, out_dir, width=346, height=260, sub_div=1):
+def aedat4_to_img_frame(aedat_path, offset_path, out_dir, folder_name='imgs_frame', width=346, height=260, sub_div=1):
     """
     Convert aedat4 to images by the original frame timestamps, which means having the same amount as the frame images
     Note: can be subdivided
     """
-    offset = {}  # 生成起始帧偏移字典,用于对齐
-    with open(offset_path, 'r') as f:
-        for line in f.readlines():
-            name, start = line.split()
-            offset[name] = int(start)+1
+    offset = get_offset(offset_path)  # 生成起始帧偏移字典,用于对齐
 
-    events, frame_start_list = _clip_events(Path(aedat_path), offset)
-    frame_start_num= len(frame_start_list)
-    sub_frame_start = np.linspace(frame_start_list[0], frame_start_list[1], sub_div+1)  # 对每一帧更进一步切分
+    events, frame_start_list = clip_events(Path(aedat_path), offset)
+    frame_start_num = len(frame_start_list)
+    sub_frame_start = np.linspace(frame_start_list[0], frame_start_list[1], sub_div + 1)  # 对每一帧更进一步切分
 
     frame_idx = 1
     sub_idx = 1
 
     output_dir = Path(out_dir)
-    output_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(exist_ok=True, parents=True)
 
-    img_dir = output_dir / 'aedat4_imgs_frame'  # 在当前目录创建输出图片的文件夹
-    img_dir.mkdir(exist_ok=True)
+    img_dir = output_dir / folder_name  # 在当前目录创建输出图片的文件夹
+    img_dir = unique_dir(img_dir)
+    img_dir.mkdir(exist_ok=True, parents=True)
 
-    events_list = []
+    start_idx = 0  # 当前窗口的起始event索引
 
-    for event in tqdm(events, leave=False, desc='Converting aedat4 to image by original frame interval'):
+    for idx, event in enumerate(
+            tqdm(events, leave=False, desc='Converting aedat4 to image by original frame interval')):
         # self._clip_events返回的frame_start_list长度是frame+1
         # 最后一个元素是额外一帧的开始时间,所以不需要处理最后一个start之后的序列, 当frame_idx==frame_num时无需额外处理
         if frame_idx < frame_start_num and event['timestamp'] >= frame_start_list[frame_idx]:  # 如果事件超过当前帧时间
-            event_img = _make_color_img(np.array(events_list, dtype=events.dtype), width=width, height=height)
-            events_list = [event]
+            event_img = _make_color_img(events[start_idx:idx], width=width, height=height)
+            start_idx = idx
             cv2.imwrite(str(img_dir / f'frame_{((frame_idx - 1) * sub_div + sub_idx):06d}.png'), event_img)
             frame_idx += 1
-            sub_frame_start = np.linspace(frame_start_list[frame_idx - 1], frame_start_list[frame_idx], sub_div+1)
+            sub_frame_start = np.linspace(frame_start_list[frame_idx - 1], frame_start_list[frame_idx], sub_div + 1)
             sub_idx = 1
         else:  # 在当前帧时间内
-            if  event['timestamp'] >= sub_frame_start[sub_idx]:
-                event_img = _make_color_img(np.array(events_list, dtype=events.dtype), width=width, height=height)
-                events_list = [event]
+            if event['timestamp'] >= sub_frame_start[sub_idx]:
+                event_img = _make_color_img(events[start_idx:idx], width=width, height=height)
+                start_idx = idx
                 cv2.imwrite(str(img_dir / f'frame_{((frame_idx - 1) * sub_div + sub_idx):06d}.png'), event_img)
                 sub_idx += 1
-            else:
-                events_list.append(event)
-    if events_list:
+
+    if start_idx < len(events):
         # 补最后一次
-        event_img = _make_color_img(np.array(events_list, dtype=events.dtype), width=width, height=height)
+        event_img = _make_color_img(events[start_idx:], width=width, height=height)
         cv2.imwrite(str(img_dir / f'frame_{((frame_idx - 1) * sub_div + sub_idx):06d}.png'), event_img)
 
     ts_df = pd.DataFrame({'frame_idx': range(1, len(frame_start_list)),
                           'timestamp': frame_start_list[:-1]})
-    ts_df.to_csv(output_dir / 'aedat4_img_frame_timestamp.csv', index=False)
+    ts_df.to_csv(output_dir / f'{folder_name}_timestamp.csv', index=False)
 
 
 if __name__ == '__main__':

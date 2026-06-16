@@ -2,7 +2,8 @@ import os
 import argparse
 from tqdm import tqdm
 from pathlib import Path
-from aggregation.utils.aedat4_to_GTP import aedat4_to_GTP
+from aggregation.utils.aedat4_to_nbinsGTP import aedat4_to_nbinsGTP
+
 
 def arg_parser():
     parser = argparse.ArgumentParser()
@@ -30,37 +31,50 @@ def arg_parser():
                         default=260,
                         help='The height of the output image.')
     parser.add_argument('--folder_name',
-                        default='imgs_GTP',
+                        default='imgs_nbinsGTP',
                         type=str,
                         help='The name of the folder containing the converted images.')
-
-    parser.add_argument('--ch12_strength', type=float, default=40, help='Value of single stacking for the first two channels(positive, negtive)')
-    parser.add_argument('--ch3_strength', type=float, default=30, help='Value of single stacking for the third channel (hidden)')
-    parser.add_argument('--ch3_decay_rate', type=float, default=0.8, help='Decay of values between two frames for the third channel (hidden)')
-    parser.add_argument('--sub_div', type=int, default=1, help='Number of sub-divisions')
+    parser.add_argument('--ch12_strength', type=float, default=40,
+                        help='Value of single stacking for the first two channels (positive, negative)')
+    parser.add_argument('--ch3_strength', type=float, default=30,
+                        help='Value of single stacking for the third channel (hidden)')
+    parser.add_argument('--ch3_decay_rate', type=float, default=0.9,
+                        help='Decay of values between two frames for the third channel (hidden)')
+    parser.add_argument('--num_bins', type=int, default=4,
+                        help='Number of bins inside one original frame interval')
     return parser.parse_args()
+
 
 def main(args):
     all_roots = []
-    for root, dirs, files in os.walk(args.dataset_dir):  # 递归遍历数据集
+    for root, dirs, files in os.walk(args.dataset_dir):
         root = Path(root)
-        aedat4_paths = list(root.glob('*.aedat4'))  # 找到所有aedat4文件
+        aedat4_paths = list(root.glob('*.aedat4'))
         if aedat4_paths:
             all_roots.append((root, aedat4_paths))
+
     for idx, (root, aedat4_paths) in enumerate(tqdm(all_roots), 1):
-        if args.copy:  # 如果需要复制到新的目录,则创建和原数据集结构相同的输出文件夹
+        if args.copy:
             rel_dir = root.relative_to(Path(args.dataset_dir))
             out_dir = Path(args.out_dir) / rel_dir
             out_dir.mkdir(exist_ok=True, parents=True)
         else:
-            out_dir = root  # 不复制,直接在原目录
-        # convert the aedat4 files
+            out_dir = root
+
         for aedat4_path in aedat4_paths:
-            aedat4_to_GTP(aedat_path=aedat4_path, offset_path=args.offset_path,
-                          out_dir=out_dir, folder_name = 'imgs_GTP',
-                          width = args.width, height = args.height,
-                          ch12_strength=args.ch12_strength, ch3_strength=args.ch3_strength,
-                          ch3_decay_rate=args.ch3_decay_rate, sub_div=args.sub_div)
+            aedat4_to_nbinsGTP(
+                aedat_path=aedat4_path,
+                offset_path=args.offset_path,
+                out_dir=out_dir,
+                folder_name=args.folder_name,
+                width=args.width,
+                height=args.height,
+                ch12_strength=args.ch12_strength,
+                ch3_strength=args.ch3_strength,
+                ch3_decay_rate=args.ch3_decay_rate,
+                num_bins=args.num_bins,
+            )
+
 
 if __name__ == '__main__':
     args = arg_parser()

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 python3 /home/yanjiezhang/Downloads/Dissertation/v2e/v2e.py \
-        -i ./raw.mp4 \
+        -i /home/yanjiezhang/Downloads/cc/dove/raw.mp4 \
         --overwrite \
         --timestamp_resolution=0.005 \
         --auto_timestamp_resolution=False \

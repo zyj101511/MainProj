@@ -3,11 +3,10 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
-from aggregation.utils.aedat4_to_img import _clip_events
+from aggregation.utils.general import clip_events, unique_dir, get_offset
 
-
-def _make_voxel_img(voxel, width, height, mode='abs_sum'):
-    assert width > 0 and height > 0
+def _make_voxel_img(voxel, mode='abs_sum'):
+    """compress voxel grid into 2d and make visualization"""
     # (C, H, W) -> (H, W)
     if mode == 'mean':
         voxel_tmp = voxel.mean(axis=0)
@@ -74,51 +73,45 @@ def _window_to_voxel(events, num_bins=1, width=346, height=260):
 
     return voxel  # (num_bin, H, W)
 
-def aedat4_to_voxel(aedat_path, offset_path, out_dir, width=346, height=260, num_bins=1, img_mode='abs_sum'):
+def aedat4_to_voxel(aedat_path, offset_path, out_dir, folder_name='imgs_voxel', width=346, height=260, num_bins=1, img_mode='abs_sum'):
     """
     Convert an aedat4 file to a voxel grid. Each voxel grid are
     from a window of events which length is divided by original frame images
     """
-    offset = {}  # 生成起始帧偏移字典,用于对齐
-    with open(offset_path, 'r') as f:
-        for line in f.readlines():
-            name, start = line.split()
-            offset[name] = int(start)+1
+    offset = get_offset(offset_path)  # 生成起始帧偏移字典,用于对齐
 
-    events, frame_start_list = _clip_events(Path(aedat_path), offset)
+    events, frame_start_list = clip_events(Path(aedat_path), offset)
     frame_start_num= len(frame_start_list)
 
     frame_idx = 1
 
     output_dir = Path(out_dir)
-    output_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    img_dir = output_dir / 'aedat4_voxel'  # 在当前目录创建输出图片的文件夹
-    img_dir.mkdir(exist_ok=True)
+    img_dir = output_dir / folder_name  # 在当前目录创建输出图片的文件夹
+    img_dir = unique_dir(img_dir)
+    img_dir.mkdir(exist_ok=True, parents=True)
 
-    events_list = []
+    start_idx = 0  # 窗口的起始event索引
 
-    for event in tqdm(events, leave=False, desc='Converting aedat4 to voxel by original frame interval'):
+    for idx, event in enumerate(tqdm(events, leave=False, desc='Converting aedat4 to voxel grid')):
         # self._clip_events返回的frame_start_list长度是frame+1
         # 最后一个元素是额外一帧的开始时间,所以不需要处理最后一个start之后的序列, 当frame_idx==frame_num时无需额外处理
         if frame_idx < frame_start_num and event['timestamp'] >= frame_start_list[frame_idx]:
-            voxel = _window_to_voxel(np.array(events_list, dtype=events.dtype),
-                                     num_bins=num_bins, width=width, height=height)
-            voxel_img = _make_voxel_img(voxel, width=width, height=height, mode=img_mode)
-            events_list = [event]
+            voxel = _window_to_voxel(events[start_idx:idx], num_bins=num_bins, width=width, height=height)
+            voxel_img = _make_voxel_img(voxel, mode=img_mode)
+            start_idx = idx
             cv2.imwrite(str(img_dir / f'voxel_{frame_idx:06d}.png'), voxel_img)
             frame_idx += 1
-        else:
-            events_list.append(event)
-    if events_list:
-        voxel = _window_to_voxel(np.array(events_list, dtype=events.dtype),
-                                 num_bins=num_bins, width=width, height=height)
-        voxel_img = _make_voxel_img(voxel, width=width, height=height, mode=img_mode)
+
+    if start_idx < len(events):
+        voxel = _window_to_voxel(events[start_idx:], num_bins=num_bins, width=width, height=height)
+        voxel_img = _make_voxel_img(voxel, mode=img_mode)
         cv2.imwrite(str(img_dir / f'voxel_{frame_idx:06d}.png'), voxel_img)
 
     ts_df = pd.DataFrame({'voxel_idx': range(1, len(frame_start_list)),
                           'timestamp': frame_start_list[:-1]})
-    ts_df.to_csv(output_dir / 'aedat4_voxel_timestamp.csv', index=False)
+    ts_df.to_csv(output_dir / f'{folder_name}_timestamp.csv', index=False)
 
 if __name__ == '__main__':
     aedat_path = '/home/yanjiezhang/Downloads/cc/dove/events.aedat4'
