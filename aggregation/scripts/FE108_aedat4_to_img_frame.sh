@@ -3,4 +3,4 @@ python3 -m aggregation.scripts_py.aedat4_dataset_to_img_frame \
         -d /media/yanjiezhang/ian/dataset/FE108_raw \
         -f /media/yanjiezhang/ian/dataset/FE108_aedat4_to_img_frame/offset.txt \
         -c \
-        -o /media/yanjiezhang/ian/dataset/FE108_aedat4_to_img_frame
+        -o /media/yanjiezhang/ian/dataset/FE108/
