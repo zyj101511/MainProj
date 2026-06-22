@@ -12,7 +12,9 @@ DATA:
   TRAIN:
     DATASETS_NAME:
     - FE108
+    - VisEvent
     DATASETS_RATIO:
+    - 1
     - 1
     SAMPLE_PER_EPOCH: 60000
   VAL:
@@ -39,8 +41,9 @@ MODEL:
   NEURON: LIF
   T: 1
   D: null
+  PRETRAINED_FILE: null
   BACKBONE:
-    TYPE: BASE
+    TYPE: TINY
     STRIDE: 16
   HEAD:
     TYPE: CENTER

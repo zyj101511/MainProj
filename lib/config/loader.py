@@ -1,6 +1,6 @@
 import yaml
 from pathlib import Path
-from defaults import Config
+from .defaults import Config
 from dataclasses import asdict, is_dataclass
 
 def save_as_yaml(path):

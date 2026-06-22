@@ -75,6 +75,7 @@ class _MODEL:
     NEURON: str = 'LIF'
     T: int = 1 # 神经元的输入步数
     D: int | None = None# I-LIF的内部状态步数
+    PRETRAINED_FILE: str | None = None
     BACKBONE: _Backbone = field(default_factory=lambda: _Backbone(
         TYPE = 'BASE',
         STRIDE = 16
