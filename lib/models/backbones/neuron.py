@@ -7,10 +7,28 @@ from spikingjelly.activation_based import neuron
 def init_sigmoid_param(p):
     return math.log((p) / (1 - p))
 
+class Quant(torch.autograd.Function):
+    @staticmethod
+    @torch.amp.custom_fwd(device_type='cuda')
+    def forward(ctx, i, min_value, max_value):
+        ctx.min = min_value
+        ctx.max = max_value
+        ctx.save_for_backward(i)
+        return torch.round(torch.clamp(i, min=min_value, max=max_value))
+
+    @staticmethod
+    @torch.amp.custom_bwd(device_type='cuda')
+    def backward(ctx, grad_output):
+        grad_input = grad_output.clone()
+        i, = ctx.saved_tensors
+        grad_input[i < ctx.min] = 0
+        grad_input[i > ctx.max] = 0
+        return grad_input, None, None
+
 class MILIF(neuron.BaseNode):
     def __init__(self, min_v:float=0., max_v:float=4, norm:float|None=None,
-                 t:int=1, decay:bool=False, decay_rate: float|None=None, state_clip:tuple|None=None,
-                 learnable_decay=False, detach_reset=True, mem=False, infere_mode=False, store_v_seq=False):
+                 t:int | None=None, decay:bool=False, decay_rate: float|None=None, state_clip:tuple|None=None,
+                 learnable_decay=False, mem=False, infere_mode=False, store_v_seq=False, detach_reset=True):
         """
         ILIF neuron with memory state and decay
         :param min_v: the lower boundary of discrete stages
@@ -42,8 +60,6 @@ class MILIF(neuron.BaseNode):
             raise RuntimeError('norm should not be 0')
         if mem and not decay:
             raise RuntimeError('mem=True has no effect when decay=False')
-        if decay and t == 1:
-            raise RuntimeError('decay=True requires t > 1')
 
         self.mem = mem
         self.min_v = min_v
@@ -60,7 +76,10 @@ class MILIF(neuron.BaseNode):
         if self.decay:
             if decay_rate is None or not (0 < decay_rate < 1):
                 raise RuntimeError('decay_rate should be in (0, 1)')
-            decay_logit = torch.full((self.T - 1,),init_sigmoid_param(decay_rate))
+            if t > 1:
+                decay_logit = torch.full((t - 1,), init_sigmoid_param(decay_rate))
+            else:
+                decay_logit = torch.tensor([init_sigmoid_param(decay_rate)])
             # 如果是可学学习,注册成参数,不可学习时存进buffer(model.to(device)时会和模型一起)
             if learnable_decay:
                 self.decay_rate = nn.Parameter(decay_logit)
@@ -73,15 +92,16 @@ class MILIF(neuron.BaseNode):
         if not self.decay:
             self.v = x
         else:
-            if self.cur_ts >= 1:
-                self.v = self.v * nn.functional.sigmoid(self.decay_rate[self.cur_ts-1]) + x
+            if self.T == 1:
+                alpha = self.decay_rate[0].sigmoid()
+                self.v = self.v * alpha + x if self.mem else x
             else:
-                if self.mem:
+                if self.cur_ts >= 1:
+                    self.v = self.v * nn.functional.sigmoid(self.decay_rate[self.cur_ts-1]) + x
+                else:
                     # 跨 forward 保留的状态，也先衰减一次
                     alpha = self.decay_rate[0].sigmoid()
-                    self.v = self.v * alpha + x
-                else:
-                    self.v = x
+                    self.v = self.v * alpha + x if self.mem else x
 
     def neuronal_fire(self):
         spike_count = Quant.apply(self.v, self.min_v, self.max_v)
@@ -104,24 +124,29 @@ class MILIF(neuron.BaseNode):
 
     def multi_step_forward(self, x_seq: torch.Tensor):
         if x_seq.shape[0] != self.T:
-            raise RuntimeError('input batch should have the same time length as defined T')
-        y_seq = []
+            raise RuntimeError(f'input batch should have the same time length as defined T: {x_seq.shape}')
 
         if self.store_v_seq:
             v_seq = []
         if not self.mem:
             self.v = 0.
+
+        y0 = None
+        y_seq = None
         for t in range(self.T):
             self.cur_ts = t
             y = self.single_step_forward(x_seq[t])
-            y_seq.append(y)
+            if y0 is None:
+                y0 = y
+                y_seq = torch.empty((self.T,) + tuple(y.shape), device=y.device, dtype=y.dtype)
+            y_seq[t] = y
             if self.store_v_seq:
                 v_seq.append(self.v)
 
         if self.store_v_seq:
             self.v_seq = torch.stack(v_seq)
 
-        return torch.stack(y_seq)
+        return y_seq
 
     def expand_spike_count(self, quant, D):
         # quant: values in [0, 1], shape(T, B, C, H, W)
@@ -132,50 +157,32 @@ class MILIF(neuron.BaseNode):
         return (count.unsqueeze(0) >= levels).to(quant)
 
 
-class Quant(torch.autograd.Function):
-    @staticmethod
-    @torch.amp.custom_fwd(device_type='cuda')
-    def forward(ctx, i, min_value, max_value):
-        ctx.min = min_value
-        ctx.max = max_value
-        ctx.save_for_backward(i)
-        return torch.round(torch.clamp(i, min=min_value, max=max_value))
-
-    @staticmethod
-    @torch.amp.custom_bwd(device_type='cuda')
-    def backward(ctx, grad_output):
-        grad_input = grad_output.clone()
-        i, = ctx.saved_tensors
-        grad_input[i < ctx.min] = 0
-        grad_input[i > ctx.max] = 0
-        return grad_input, None, None
-
 if __name__ == '__main__':
     # (T, B, C, H, W)
-    MILIF = MILIF(min_v=0, max_v=4,
-                  t = 10, decay=True,
+    n = MILIF(min_v=0, max_v=4,
+                  t = 1, decay=True,
                   decay_rate=0.25, state_clip=(0, 4),
                   learnable_decay=False, mem=True, store_v_seq=True)
     # the first forward
-    dummy = torch.ones(10, 5, 3, 18, 18)
-    y = MILIF(dummy)
-    print(MILIF.v.sum())
+    dummy = torch.ones(1, 5, 3, 18, 18)
+    y = n(dummy)
+    print(n.v.mean())
     print(y.shape)  # (T, B, C, H, W)
 
     # the second forward with zero input
-    dummy2 = torch.zeros(10, 5, 3, 18, 18)
-    y2 = MILIF(dummy2)
+    dummy2 = torch.zeros(1, 5, 3, 18, 18)
+    y2 = n(dummy2)
     print(y2.shape)
-    print(MILIF.v.sum())  # mem == True means memory across forward, so it should not be all 0
+    print(n.v.mean())  # mem == True means memory across forward, so it should not be all 0
 
-    dummy3 = torch.zeros(10, 5, 3, 18, 18)
-    y3 = MILIF(dummy3)
+    dummy3 = torch.zeros(1, 5, 3, 18, 18)
+    y3 = n(dummy3)
     print(y3.shape)
-    print(MILIF.v.sum())
+    print(n.v.mean())
 
     # spread the discrete output into spike trains
     # (T, D, B, C, H, W)
-    MILIF.infere_mode = True
-    dummy4 = torch.zeros(10, 5, 3, 18, 18)
-    y4 = MILIF(dummy4)
+    n.infere_mode = True
+    dummy4 = torch.zeros(1, 5, 3, 18, 18)
+    y4 = n(dummy4)
     print(y4.shape)  # (T, D, B, C, H, W)

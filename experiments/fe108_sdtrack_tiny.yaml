@@ -38,9 +38,9 @@ DATA:
     SCALE_JITTER: 0.0
     NUMBER: 1
 MODEL:
-  NEURON: LIF
+  NEURON: MILIF
   T: 1
-  D: null
+  D: 4
   PRETRAINED_FILE: null
   BACKBONE:
     TYPE: TINY

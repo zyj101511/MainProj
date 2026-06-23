@@ -11,4 +11,5 @@ output/
 logs/
 .Ds_Store/
 drafts/
+pretrained_models/
 

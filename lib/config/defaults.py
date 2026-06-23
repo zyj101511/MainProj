@@ -85,8 +85,8 @@ class _MODEL:
         NUM_CHANNELS = 256
     ))
     def __post_init__(self):
-        if self.NEURON == 'I-LIF' and (not isinstance(self.D, int) or self.D <= 0):
-            raise ValueError("D has to be set to a positive integer when using I-LIF neuron")
+        if self.NEURON == 'MILIF' and (not isinstance(self.D, int) or self.D <= 0):
+            raise ValueError("D has to be set to a positive integer when using MILIF neuron")
 
 @dataclass
 class _SCHEDULER:
