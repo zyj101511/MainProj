@@ -296,7 +296,7 @@ class Cross_MS_Attention_linear(nn.Module):
         q_template = self.q_spike_template(q_template)
         q_template = q_template.flatten(3)  # [T, B, 256, 64]
         q_template = (
-            q_template.transpose(-1, -2)
+            q_template.transpose(-1, -2)  # [T, B, N, C]
             .reshape(T, B, N_template, self.num_heads, C // self.num_heads)
             .permute(0, 1, 3, 2, 4)
             .contiguous()
@@ -350,12 +350,12 @@ class Cross_MS_Attention_linear(nn.Module):
             .contiguous()
         )
         search_kv = k_search.transpose(-2, -1) @ v_search
-        template = q_template @ search_kv * (self.scale * 2)
+        template = q_template @ search_kv * (self.scale * 2)  # (T, B, num_head, N, C)
 
         template_kv = k_template.transpose(-2, -1) @ v_template
-        search = q_search @ template_kv * (self.scale * 2)
+        search = q_search @ template_kv * (self.scale * 2)  # # (T, B, num_head, N, C)
 
-        x = torch.cat((template, search), dim=3)
+        x = torch.cat([template, search], dim=3)
         _, _, _, _, C_padding = x.shape
         padding = torch.zeros((T, B, self.num_heads, 4, C_padding), device=x.device, dtype=x.dtype)
         x = torch.cat((x, padding), dim=3)
@@ -427,7 +427,10 @@ class MS_DownSampling(nn.Module):
         )
         self.first_layer = first_layer
         if not first_layer:
-            self.encode_spike = self.neuron_factory(t=t, mem=neuron_mem)
+            if not neuron_mem:
+                self.encode_spike = self.neuron_factory(t=t, mem=False)
+            else:
+                self.encode_spike = self.neuron_factory(t=t)
 
     def forward(self, x):
         if hasattr(self, "encode_spike"):

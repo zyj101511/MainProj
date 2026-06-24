@@ -31,7 +31,6 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
             stride=2,
             padding=3,
             first_layer=True,
-            neuron_mem=True,
             neuron_factory=self.neuron_factory
         )
 
@@ -47,7 +46,6 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
             stride=2,
             padding=1,
             first_layer=False,
-            neuron_mem=True,
             neuron_factory=self.neuron_factory
         )
 
@@ -63,7 +61,6 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
             stride=2,
             padding=1,
             first_layer=False,
-            neuron_mem=True,
             neuron_factory=self.neuron_factory
         )
 
@@ -83,7 +80,6 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
             stride=2,
             padding=1,
             first_layer=False,
-            neuron_mem=True,
             neuron_factory=self.neuron_factory
         )
 
@@ -254,18 +250,18 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
 
         return y, aux_dict  # [T, B, 320, 320]
 
-def sdtrack_tiny(**kwargs):
-    # 14,882,922 with learnable decay and pad
-    # 14,882,921 with learnable decay
-    # 14,882,761 with nothing
+def sdtrack_tiny(t):
+    # 14,880,033 with learnable decay and pad
+    # 14,880,032 with learnable decay
+    # 14,879,872 with nothing
     model = Spiking_vit_MetaFormer_Spike_SepConv(
-        t=3,
+        t=t,
         in_channels=3,
         embed_dim=[64, 128, 256, 320],
         num_heads=8,
         mlp_ratio=4,
         lambda_ratio=4,
-        learnable_pad = False,
+        learnable_pad = True,
         cross=False,
         neuron_factory=MILIF_layer,
     )
@@ -279,7 +275,7 @@ MILIF_layer = partial(MILIF,
                       decay=True,
                       decay_rate=0.25,
                       state_clip=(-0.5, 4),
-                      learnable_decay=False,
+                      learnable_decay=True,
                       mem=True,
                       infere_mode=False,
                       detach_reset=True,
@@ -288,8 +284,13 @@ MILIF_layer = partial(MILIF,
 if __name__ == '__main__':
     from spikingjelly.activation_based.monitor import OutputMonitor, GradInputMonitor
     with torch.inference_mode():
-        model = sdtrack_tiny()
+        model = sdtrack_tiny(t=3)
         model.to('cuda:0')
+        num_p = 0
+        for p in model.parameters():
+            num_p += p.numel()
+        print(f'Total number of parameters: {num_p:,}')
+
         output_monitor = OutputMonitor(model, nn.Conv2d)
         grad_monitor = GradInputMonitor(model, MILIF)
 

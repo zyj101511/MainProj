@@ -16,8 +16,7 @@ class _Dataset:
 
 @dataclass
 class _DataCrop:
-    HEIGHT: int  # 输入给模型的高宽
-    WIDTH: int
+    SIZE:int   # 输入给模型的高宽
     FACTOR: float # 裁切大小对于BBOX的缩放倍数
     CENTER_JITTER: float
     SCALE_JITTER: float
@@ -43,8 +42,7 @@ class _DATA:
     ))
     # SEARCH
     SEARCH: _DataCrop = field(default_factory=lambda: _DataCrop(
-        HEIGHT=256,
-        WIDTH=256,
+        SIZE=256,
         FACTOR=5.0,
         CENTER_JITTER=4.5,
         SCALE_JITTER=0.5,
@@ -52,8 +50,7 @@ class _DATA:
     ))
     # TEMPLATE
     TEMPLATE: _DataCrop = field(default_factory=lambda: _DataCrop(
-        HEIGHT=128,
-        WIDTH=128,
+        SIZE=128,
         FACTOR=2.0,
         CENTER_JITTER=0.0,
         SCALE_JITTER=0.0,

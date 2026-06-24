@@ -28,7 +28,7 @@ class Quant(torch.autograd.Function):
 class MILIF(neuron.BaseNode):
     def __init__(self, min_v:float=0., max_v:float=4, norm:float|None=None,
                  t:int | None=None, decay:bool=False, decay_rate: float|None=None, state_clip:tuple|None=None,
-                 learnable_decay=False, mem=False, infere_mode=False, store_v_seq=False, detach_reset=True):
+                 learnable_decay=False, mem=False, infere_mode=False, store_v_seq=False, detach_reset=True, step_mode:str='m'):
         """
         ILIF neuron with memory state and decay
         :param min_v: the lower boundary of discrete stages
@@ -47,8 +47,8 @@ class MILIF(neuron.BaseNode):
         super().__init__(v_threshold=1.,
                          v_reset=None,
                          detach_reset=detach_reset,
-                         step_mode='m')
-        if t < 1:
+                         step_mode=step_mode)
+        if step_mode == 'm' and t < 1:
             raise RuntimeError('t should be >= 1')
         if max_v <= 0 or min_v >= max_v or min_v < 0:
             raise RuntimeError('max_v and min_v should not less than 0, and max_v should be >= min_v')
