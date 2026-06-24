@@ -121,11 +121,11 @@ def build_model(cfg, t, training=True):
 if __name__ == '__main__':
     from lib.config.loader import load_from_yaml
     cfg = load_from_yaml('/home/yanjiezhang/Downloads/Dissertation/MainProj/experiments/fe108_sdtrack_tiny.yaml')
-    model = build_model(cfg, t=32, training=False)
+    model = build_model(cfg, t=1, training=False)
     model.to('cuda')
 
-    dummy_search = torch.randn(32, 1, 3, 256, 256).to('cuda')
-    dummy_template = torch.randn(32, 1, 3, 128, 128).to('cuda')
+    dummy_search = torch.randn(1, 32, 3, 256, 256).to('cuda')
+    dummy_template = torch.randn(1, 32, 3, 128, 128).to('cuda')
     import time
     with torch.inference_mode():
         start = time.time()
