@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 from torch import nn
 from lib.models.backbones.neuron import MILIF
 from spikingjelly.activation_based.layer import SeqToANNContainer
@@ -43,6 +42,9 @@ print(y.shape)
 '''
 
 class CenterPredictor(nn.Module):
+    '''
+    bbox pred: normalized (cx, cy, w, h)
+    '''
     def __init__(self, t, in_channel=64, hidden_channel=256, search_feat_size=20, stride=16):
         super().__init__()
         self.feat_sz = search_feat_size
@@ -79,37 +81,27 @@ class CenterPredictor(nn.Module):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
 
-    def forward(self, feature, gt_score_map=None, return_mean_bbox=True, return_max_score=False):  #  (T, B, C, H, W)
+    def forward(self, feature, gt_score_map=None, return_last=True, return_max_score=False):  #  (T, B, C, H, W)
         # (T, B, 1, H, W) (T, B, 2, H, W) (T, B, 2, H, W)
         score_map_ctr, offset_map, size_map = self.get_score_map(feature)
 
         if gt_score_map is None:
-            bbox, max_score = self.cal_bbox(score_map_ctr, offset_map, size_map, return_max_score)  # (T, B, 4), 4:(x, y, h, w)
+            bbox, max_score = self.cal_bbox(score_map_ctr, offset_map, size_map, return_max_score)  # (T, B, 4), 4:(cx, cy, w, h)
         else:
             bbox, max_score = self.cal_bbox(gt_score_map, offset_map, size_map, return_max_score)
-        if return_mean_bbox:
-            return bbox.mean(0), max_score, score_map_ctr, offset_map, size_map
-        return bbox, max_score, score_map_ctr, offset_map, size_map
+        if return_last:
+            if max_score is not None:
+                max_score = max_score[-1]
+            return bbox[-1], score_map_ctr[-1], offset_map[-1], size_map[-1], max_score
+        return bbox, score_map_ctr, offset_map, size_map, max_score
 
     def cal_bbox(self, score_map_ctr, offset_map, size_map,
                  return_max_score=False):  # (T, B, 1, H, W) (T, B, 2, H, W) (T, B, 2, H, W)
-        max_score, idx = torch.max(score_map_ctr.flatten(2), dim=-1, keepdim=True)
-        idx_y = idx // self.feat_sz
-        idx_x = idx % self.feat_sz
-        # idx (T, B, 1)
-        idx = idx.unsqueeze(2).expand(idx.shape[0], idx.shape[1], 2, 1)  # (T, B, 2, 1)
-        offset = offset_map.flatten(3).gather(dim=-1, index=idx)  # (T, B, 2, 1)
-        size = size_map.flatten(3).gather(dim=-1, index=idx)  # (T, B, 2, 1)
-
-        x = (idx_x.to(torch.float) + offset[..., 0, :])
-        y = (idx_y.to(torch.float) + offset[..., 1, :])
-        h = size[..., 0, :]
-        w = size[..., 1, :]
-
-        bbox = torch.cat([x, y, h, w], dim=-1)
+        cx, cy, _, _, w, h, max_score = self.get_pred(score_map_ctr, offset_map, size_map)
+        bbox = torch.cat([cx, cy, w, h], dim=-1)
         if return_max_score:
             return bbox, max_score
-        return bbox, None  # (T, B, 4), 4:(x, y, h, w)
+        return bbox, None  # (T, B, 4), 4:(cx, cy, w, h)
 
     def get_score_map(self, x):
         def _clamp_sigmoid(x):
@@ -139,49 +131,32 @@ class CenterPredictor(nn.Module):
         # (T, B, 1, H, W) (T, B, 2, H, W) (T, B, 2, H, W)
         return _clamp_sigmoid(score_map_ctr), 2*_clamp_sigmoid(score_map_offset)-1, _clamp_sigmoid(score_map_size)
 
-    def get_pred(self, score_map_ctr, size_map, offset_map):
-        max_score, idx = torch.max(score_map_ctr.flatten(2), dim=-1, keepdim=True)
+    def get_pred(self, score_map_ctr, offset_map, size_map):
+        """
+        return normalized cx, cy, offset_X, offset_y, w, h and max_score
+        """
+        # (T, B, 1, H, W) (T, B, 2, H, W) (T, B, 2, H, W)
+        max_score, idx = torch.max(score_map_ctr.flatten(2), dim=-1, keepdim=True)  # (T, B, 1)
         idx_y = idx // self.feat_sz
         idx_x = idx % self.feat_sz
         # idx (T, B, 1)
         idx = idx.unsqueeze(2).expand(idx.shape[0], idx.shape[1], 2, 1)  # (T, B, 2, 1)
-        offset = offset_map.flatten(3).gather(dim=-1, index=idx).squeeze(-1)  # (T, B, 2)
-        size = size_map.flatten(3).gather(dim=-1, index=idx).squeeze(-1)  # (T, B, 2)
+        offset = offset_map.flatten(3).gather(dim=-1, index=idx)  # (T, B, 2, 1)
+        size = size_map.flatten(3).gather(dim=-1, index=idx) # (T, B, 2, 1)
 
-        ctr_x = ((idx_x.to(torch.float) + offset[..., 0]) / self.feat_sz)
-        ctr_y = ((idx_y.to(torch.float) + offset[..., 1]) / self.feat_sz)
-        offset_x = offset[..., 0]
-        offset_y = offset[..., 1]
-        size_h = size[..., 0] * self.feat_sz
-        size_w = size[..., 1] * self.feat_sz
-        return ctr_x, ctr_y, offset_x, offset_y, size_h, size_w
-
-class _mlp(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, num_layers, BN=False):
-        super().__init__()
-        self.num_layers = num_layers
-        self.num_layers = num_layers
-        h = [hidden_dim] * (num_layers - 1)
-        if BN:
-            self.layers = nn.ModuleList(nn.Sequential(nn.Linear(n, k), nn.BatchNorm1d(k))
-                                        for n, k in zip([input_dim] + h, h + [output_dim]))
-        else:
-            self.layers = nn.ModuleList(nn.Linear(n, k)
-                                        for n, k in zip([input_dim] + h, h + [output_dim]))
-
-    def forward(self, x):
-        for i, layer in enumerate(self.layers):
-            x = F.relu(layer(x)) if i < self.num_layers - 1 else layer(x)
-        return x
+        ctr_x = ((idx_x.to(torch.float) + offset[..., 0, :]) / self.feat_sz)
+        ctr_y = ((idx_y.to(torch.float) + offset[..., 1, :]) / self.feat_sz)
+        offset_x = offset[..., 0, :] / self.feat_sz
+        offset_y = offset[..., 1, :] / self.feat_sz
+        size_w = size[..., 0, :]
+        size_h = size[..., 1, :]
+        # (T, B, 1)
+        return ctr_x, ctr_y, offset_x, offset_y, size_w, size_h, max_score
 
 def build_head(cfg, t, feat_dim):
 
     stride = cfg.MODEL.BACKBONE.STRIDE
-    if cfg.MODEL.HEAD.TYPE == "MLP":
-        mlp_head = _mlp(feat_dim, feat_dim, 4, 3)  # dim_in, dim_hidden, dim_out, 3 layers
-        return mlp_head
-
-    elif cfg.MODEL.HEAD.TYPE == "CENTER":
+    if cfg.MODEL.HEAD.TYPE == "CENTER":
         in_channel = feat_dim
         out_channel = cfg.MODEL.HEAD.NUM_CHANNELS
         feat_sz = int(cfg.DATA.SEARCH.SIZE / stride)
@@ -196,16 +171,85 @@ def build_head(cfg, t, feat_dim):
 
 
 if __name__ == '__main__':
-    from lib.config.loader import load_from_yaml
-    cfg = load_from_yaml('/home/yanjiezhang/Downloads/Dissertation/MainProj/experiments/fe108_sdtrack_tiny.yaml')
-    head = build_head(cfg, t=5, feat_dim=256).to('cuda')
-    inp = torch.randn(5, 8, 256, 24, 24).to('cuda')
-    bbox, max_score, score_map_ctr, offset_map, size_map = head(inp, gt_score_map=None, return_mean_bbox=True, return_max_score=False)
-    num_p = 0
-    for p in head.parameters():
-        num_p += p.numel()
+    import torch
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    T = 5
+    B = 8
+    C = 256
+    H = 24
+    W = 24
+
+    head = CenterPredictor(
+        t=T,
+        in_channel=C,
+        hidden_channel=256,
+        search_feat_size=H,
+        stride=16
+    ).to(device)
+
+    head.eval()
+
+    feature = torch.randn(T, B, C, H, W, device=device)
+
+    with torch.inference_mode():
+        bbox, score_map_ctr, offset_map, size_map, max_score = head(
+            feature,
+            gt_score_map=None,
+            return_last=True,
+            return_max_score=True
+        )
+
+        print('====== forward output ======')
+        print('bbox:', bbox.shape)  # (B, 4)
+        print('max_score:', max_score.shape)  # (B, 1)
+        print('score_map_ctr:', score_map_ctr.shape)  # (B, 1, H, W)
+        print('offset_map:', offset_map.shape)  # (B, 2, H, W)
+        print('size_map:', size_map.shape)  # (B, 2, H, W)
+
+        print('\n====== bbox value range ======')
+        print('bbox min:', bbox.min().item())
+        print('bbox max:', bbox.max().item())
+        print('bbox example:', bbox[0])
+
+        print('\n====== score / offset / size range ======')
+        print('score_map_ctr min/max:', score_map_ctr.min().item(), score_map_ctr.max().item())
+        print('offset_map min/max:', offset_map.min().item(), offset_map.max().item())
+        print('size_map min/max:', size_map.min().item(), size_map.max().item())
+
+        # 如果要测试 get_pred / cal_bbox，需要用完整 T 维输出
+        score_map_ctr_full, offset_map_full, size_map_full = head.get_score_map(feature)
+
+        cx, cy, offset_x, offset_y, size_w, size_h, max_score2 = head.get_pred(
+            score_map_ctr_full,
+            offset_map_full,
+            size_map_full
+        )
+
+        print('\n====== get_pred output ======')
+        print('cx:', cx.shape)  # (T, B, 1)
+        print('cy:', cy.shape)  # (T, B, 1)
+        print('offset_x:', offset_x.shape)  # (T, B, 1)
+        print('offset_y:', offset_y.shape)  # (T, B, 1)
+        print('size_w:', size_w.shape)  # (T, B, 1)
+        print('size_h:', size_h.shape)  # (T, B, 1)
+        print('max_score2:', max_score2.shape)  # (T, B, 1)
+
+        bbox_t, max_score3 = head.cal_bbox(
+            score_map_ctr_full,
+            offset_map_full,
+            size_map_full,
+            return_max_score=True
+        )
+
+        print('\n====== cal_bbox output ======')
+        print('bbox_t:', bbox_t.shape)  # (T, B, 4)
+        print('max_score3:', max_score3.shape)  # (T, B, 1)
+        print('bbox_t example:', bbox_t[0, 0])
+
+    num_p = sum(p.numel() for p in head.parameters())
+    print('\n====== params ======')
     print(f'The number of parameters is {num_p:,}')
-    print(f'The shape of bbox is {bbox.shape}')
-    print(f'The shape of score_map is {score_map_ctr.shape}: T, B, 1, H, W')
-    print(f'The shape of offset_map is {offset_map.shape}: T, B, 2, H, W')
-    print(f'The shape of size_map is {size_map.shape}: T, B, 2, H, W')
+
+

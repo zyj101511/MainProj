@@ -1,7 +1,6 @@
 import torch
 from torch import nn
 from pathlib import Path
-from lib.utils.box_ops import box_xyxy_to_cxcywh
 from lib.models.heads.sdtrack_center import build_head
 from lib.models.backbones.sdtrack_tiny import sdtrack_tiny
 
@@ -18,17 +17,17 @@ class SDTrack(nn.Module):
             self.search_feature_size = int(head.feat_sz)
             self.search_feature_len = int(self.search_feature_size ** 2)
 
-    def forward(self, template: torch.Tensor, search: torch.Tensor, return_mean_bbox=True, return_max_score=False):
+    def forward(self, template: torch.Tensor, search: torch.Tensor, return_last=True, return_max_score=False):
         # 无论单步还是多步, backbone输入都是5D(T, B, C, H, W), 输出是4D(T, B, N, C) N=template tokens + search tokens
         features, aux_dict = self.backbone(template=template, search=search)
         last_feature = features[-1] if isinstance(features, list) else features  # 返回多层特征的backbone只用最后一层
-        out = self._forward_head(feature=last_feature, return_mean_bbox=return_mean_bbox, return_max_score=return_max_score)
+        out_dict = self._forward_head(feature=last_feature, return_last=return_last, return_max_score=return_max_score)
         # 记录辅助输出和backbone的输出特征
-        out.update(aux_dict)
-        out['backbone_feature'] = features
-        return out
+        out_dict.update(aux_dict)
+        out_dict['backbone_feature'] = features
+        return out_dict
 
-    def _forward_head(self, feature: torch.Tensor, return_mean_bbox, return_max_score):
+    def _forward_head(self, feature: torch.Tensor, return_last, return_max_score):
         if feature.dim() != 4: raise RuntimeError(f'Input feature of head should be a 4D tensor(T, B, N, C): {feature.dim()}')
         if feature.size(-2) < self.search_feature_len: raise RuntimeError(f'Input feature map of head has token less than expected search feature len: {feature.size(-2)}')
 
@@ -41,25 +40,17 @@ class SDTrack(nn.Module):
         # search_feature(T, B, C, H, W)
         search_feature = search_feature.view(T, B, C, self.search_feature_size, self.search_feature_size)
 
-        if self.head_type == 'CORNER':
-            # pred_box(B, 4), score_map(B, 1, H, W)
-            pred_box, score_map, = self.head(feature=search_feature, return_dist=True)
-            outputs_coord = box_xyxy_to_cxcywh(pred_box)
-            out = {'pred_boxes': outputs_coord,
-                   'score_map': score_map}
-            return out
-
-        elif self.head_type == 'CENTER':
+        if self.head_type == 'CENTER':
             # (B, 4), (B, 2, H, W), (B, 2, H, W), (B, 1, H, W)
-            pred_box, max_score, offset_map, size_map, score_map_ctr = self.head(feature=search_feature,
-                                                                                 return_mean_bbox=return_mean_bbox,
+            pred_box, score_map_ctr, offset_map, size_map, max_score = self.head(feature=search_feature,
+                                                                                 return_last=return_last,
                                                                                  return_max_score=return_max_score)
-            out = {'pred_boxes': pred_box,
-                   'max_score': max_score,
-                   'offset_map': offset_map,
-                   'size_map' : size_map,
-                   'score_map': score_map_ctr}
-            return out
+            out_dict = {'pred_boxes': pred_box,
+                        'score_map': score_map_ctr,
+                        'offset_map': offset_map,
+                        'size_map' : size_map,
+                        'max_score': max_score}
+            return out_dict
         else:
             raise NotImplementedError(f'Selected head type is not implemented: {self.head_type}')
 
@@ -121,15 +112,15 @@ def build_model(cfg, t, training=True):
 if __name__ == '__main__':
     from lib.config.loader import load_from_yaml
     cfg = load_from_yaml('/home/yanjiezhang/Downloads/Dissertation/MainProj/experiments/fe108_sdtrack_tiny.yaml')
-    model = build_model(cfg, t=1, training=False)
-    model.to('cuda')
+    net = build_model(cfg, t=1, training=False)
+    net.to('cuda')
 
     dummy_search = torch.randn(1, 32, 3, 256, 256).to('cuda')
     dummy_template = torch.randn(1, 32, 3, 128, 128).to('cuda')
     import time
     with torch.inference_mode():
         start = time.time()
-        y = model(search=dummy_search, template=dummy_template, return_mean_bbox=False, return_max_score=False)
+        y = net(search=dummy_search, template=dummy_template, return_last=False, return_max_score=False)
         print(time.time() - start)
 
     for key in y.keys():
