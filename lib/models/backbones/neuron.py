@@ -115,6 +115,8 @@ class MILIF(neuron.BaseNode):
 
     def single_step_forward(self, x: torch.Tensor):
         self.v_float_to_tensor(x)
+        if self.mem and self.cur_ts == 0 and isinstance(self.v, torch.Tensor):
+            self.v = self.v.detach()
         self.neuronal_charge(x)
         spike = self.neuronal_fire()
         self.neuronal_reset(spike)

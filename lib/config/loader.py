@@ -1,6 +1,6 @@
 import yaml
 from pathlib import Path
-from .defaults import Config
+from lib.config.defaults import Config
 from dataclasses import asdict, is_dataclass
 
 def save_as_yaml(path):
@@ -32,3 +32,6 @@ def _update_from_dict(cfg_obj, cfg_dict):
             _update_from_dict(obj_value, value)
         else:  # 如果cfg_obj当前value不再是dataclass, 用cfg_dict的value更新cfg_obj的value
             setattr(cfg_obj, key, value)
+
+if __name__ == "__main__":
+    save_as_yaml("/home/yanjiezhang/Downloads/Dissertation/MainProj/experiments/fe108_sdtrack_tiny.yaml")

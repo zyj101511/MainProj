@@ -17,17 +17,11 @@ class _Dataset:
 @dataclass
 class _DataCrop:
     SIZE:int   # 输入给模型的高宽
-    FACTOR: float # 裁切大小对于BBOX的缩放倍数
-    CENTER_JITTER: float
+    SCALE_FACTOR: float
     SCALE_JITTER: float
-    NUMBER: int
 
 @dataclass
 class _DATA:
-    SAMPLER_MODE: str = "causal"  # SDTrack采样方法看/draft/todo.md
-    MAX_SAMPLE_INTERVAL: int = 200  # 控制采样时template和search两帧的最大间隔
-    MEAN: list[float] = field(default_factory=lambda: [0.485, 0.456, 0.406]) # 预训练数据集mean和std, 用于图像归一化
-    STD: list[float] = field(default_factory=lambda: [0.229, 0.224, 0.225])
     # TRAIN
     TRAIN: _Dataset = field(default_factory=lambda: _Dataset(
         DATASETS_NAME=["FE108", "VisEvent"],
@@ -43,18 +37,14 @@ class _DATA:
     # SEARCH
     SEARCH: _DataCrop = field(default_factory=lambda: _DataCrop(
         SIZE=256,
-        FACTOR=5.0,
-        CENTER_JITTER=4.5,
-        SCALE_JITTER=0.5,
-        NUMBER=1,
+        SCALE_FACTOR=1.5,
+        SCALE_JITTER=0.4
     ))
     # TEMPLATE
     TEMPLATE: _DataCrop = field(default_factory=lambda: _DataCrop(
         SIZE=128,
-        FACTOR=2.0,
-        CENTER_JITTER=0.0,
-        SCALE_JITTER=0.0,
-        NUMBER=1,
+        SCALE_FACTOR=1,
+        SCALE_JITTER=1
     ))
 
 @dataclass
