@@ -250,7 +250,7 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
 
         return y, aux_dict  # [T, B, 320, 320]
 
-def sdtrack_tiny(t):
+def mastrack(t):
     # 14,880,033 with learnable decay and pad
     # 14,880,032 with learnable decay
     # 14,879,872 with nothing
@@ -284,7 +284,7 @@ MILIF_layer = partial(MILIF,
 if __name__ == '__main__':
     from spikingjelly.activation_based.monitor import OutputMonitor, GradInputMonitor
     with torch.inference_mode():
-        model = sdtrack_tiny(t=3)
+        model = mastrack(t=3)
         model.to('cuda:0')
         num_p = 0
         for p in model.parameters():

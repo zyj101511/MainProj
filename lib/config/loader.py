@@ -34,4 +34,4 @@ def _update_from_dict(cfg_obj, cfg_dict):
             setattr(cfg_obj, key, value)
 
 if __name__ == "__main__":
-    save_as_yaml("/home/yanjiezhang/Downloads/Dissertation/MainProj/experiments/fe108_sdtrack_tiny.yaml")
+    save_as_yaml("/experiments/fe108_mastrack.yaml")

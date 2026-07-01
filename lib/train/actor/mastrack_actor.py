@@ -4,8 +4,8 @@ from lib.train.actor.base_actor import BaseActor
 from lib.utils.box_ops import box_cxcywh_to_xyxy, box_xywh_to_xyxy
 from lib.utils.heapmap_utils import generate_heatmap
 
-class SDTrackActor(BaseActor):
-    """ Actor for training SDTrack models """
+class MASTrackActor(BaseActor):
+    """ Actor for training MASTrack models """
     def __init__(self, net, objective, loss_weight, settings, cfg):
         super().__init__(net, objective)
         self.loss_weight = loss_weight

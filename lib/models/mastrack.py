@@ -1,11 +1,11 @@
 import torch
 from torch import nn
 from pathlib import Path
-from lib.models.heads.sdtrack_center import build_head
-from lib.models.backbones.sdtrack_tiny import sdtrack_tiny
+from lib.models.heads.track_head import build_head
+from lib.models.backbones.mastrack import mastrack
 
 
-class SDTrack(nn.Module):
+class MASTrack(nn.Module):
     def __init__(self, backbone, head, head_type='CENTER'):
         super().__init__()
         self.backbone = backbone
@@ -57,7 +57,7 @@ class SDTrack(nn.Module):
 def _build_backbone_head(cfg, t):
     # 根据模型type创建backbone和head
     if cfg.MODEL.BACKBONE.TYPE == 'TINY':
-        backbone = sdtrack_tiny(t=t)
+        backbone = mastrack(t=t)
         feat_dim = backbone.embed_dim
         head = build_head(cfg, t=t, feat_dim=feat_dim)
     else:
@@ -76,7 +76,7 @@ def build_model(cfg, t, training=True):
     # print(str(pretrained_path))
     backbone, head = _build_backbone_head(cfg, t)
 
-    model = SDTrack(
+    model = MASTrack(
         backbone=backbone,
         head=head,
         head_type=cfg.MODEL.HEAD.TYPE,
@@ -111,7 +111,7 @@ def build_model(cfg, t, training=True):
 
 if __name__ == '__main__':
     from lib.config.loader import load_from_yaml
-    cfg = load_from_yaml('/home/yanjiezhang/Downloads/Dissertation/MainProj/experiments/fe108_sdtrack_tiny.yaml')
+    cfg = load_from_yaml('/experiments/fe108_mastrack.yaml')
     net = build_model(cfg, t=1, training=False)
     net.to('cuda')
 
