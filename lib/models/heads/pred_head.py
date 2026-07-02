@@ -147,7 +147,7 @@ class CenterPredictor(nn.Module):
         # (B, 1)
         return ctr_x, ctr_y, offset_x, offset_y, size_w, size_h, max_score
 
-def build_head(cfg, feat_dim):
+def build_head(cfg, t, feat_dim):
 
     stride = cfg.MODEL.BACKBONE.STRIDE
     if cfg.MODEL.HEAD.TYPE == "CENTER":

@@ -58,6 +58,11 @@ class _Head:
     NUM_CHANNELS: int  # 中间层通道数
 
 @dataclass
+class _Multi_Timescale_Memory:
+    NUM_BRANCHES: int  # 多时间尺度分支数
+    NUM_LAYERS: int  # 每个分支的point-wise conv层数
+
+@dataclass
 class _MODEL:
     NEURON: str = 'LIF'
     T: int = 1 # 神经元的输入步数
@@ -66,6 +71,10 @@ class _MODEL:
     BACKBONE: _Backbone = field(default_factory=lambda: _Backbone(
         TYPE = 'BASE',
         STRIDE = 16
+    ))
+    MULTI_TIMESCALE_MODULE: _Multi_Timescale_Memory = field(default_factory=lambda: _Multi_Timescale_Memory(
+        NUM_BRANCHES = 4,
+        NUM_LAYERS = 1
     ))
     HEAD: _Head = field(default_factory=lambda: _Head(
         TYPE = 'CENTER',

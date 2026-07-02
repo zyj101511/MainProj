@@ -1,4 +1,5 @@
 import torch
+from numpy.ma.core import identity
 from torch import nn
 from spikingjelly.activation_based.layer import SeqToANNContainer
 
@@ -399,7 +400,7 @@ class MS_Block_Spike_AttnMLP(nn.Module):
         x = x + self.attn(x)
         x = x + self.mlp(x)
 
-        return x
+        return x  # (T, B, C, H, W)
 
 
 class MS_DownSampling(nn.Module):
@@ -426,7 +427,7 @@ class MS_DownSampling(nn.Module):
             nn.BatchNorm2d(embed_dims)
         )
         self.first_layer = first_layer
-        if not first_layer:
+        if not first_layer:  # 第一层不先过脉冲
             if not neuron_mem:
                 self.encode_spike = self.neuron_factory(t=t, mem=False)
             else:
@@ -439,3 +440,10 @@ class MS_DownSampling(nn.Module):
         x = self.encode_bn(x)
 
         return x
+
+
+
+
+
+
+

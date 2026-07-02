@@ -27,8 +27,10 @@ class Quant(torch.autograd.Function):
 
 class MILIF(neuron.BaseNode):
     def __init__(self, min_v:float=0., max_v:float=4, norm:float|None=None,
-                 t:int | None=None, decay:bool=False, decay_rate: float|None=None, state_clip:tuple|None=None,
-                 learnable_decay=False, mem=False, infere_mode=False, store_v_seq=False, detach_reset=True, step_mode:str='m'):
+                 t:int | None=None, decay:bool=False, decay_rate: float|None=None,
+                 state_clip:tuple|None=None, learnable_decay=False, mem=False,
+                 infere_mode=False, store_v_seq=False, detach_reset=True,
+                 step_mode:str='m', reset_mode:str='soft'):
         """
         ILIF neuron with memory state and decay
         :param min_v: the lower boundary of discrete stages
@@ -50,6 +52,8 @@ class MILIF(neuron.BaseNode):
                          step_mode=step_mode)
         if step_mode == 'm' and t < 1:
             raise RuntimeError('t should be >= 1')
+        elif step_mode == 's':
+            t = 1
         if max_v <= 0 or min_v >= max_v or min_v < 0:
             raise RuntimeError('max_v and min_v should not less than 0, and max_v should be >= min_v')
         if norm is None:
@@ -72,6 +76,7 @@ class MILIF(neuron.BaseNode):
         self.infere_mode = infere_mode
         self.state_clip = state_clip
         self.store_v_seq = store_v_seq
+        self.reset_mode = reset_mode
 
         if self.decay:
             if decay_rate is None or not (0 < decay_rate < 1):
@@ -109,7 +114,11 @@ class MILIF(neuron.BaseNode):
 
     def neuronal_reset(self, spike):
         spike_d = spike.detach() if self.detach_reset else spike
-        self.v = self.v - spike_d
+        if self.reset_mode == 'soft':
+            self.v = self.v - spike_d
+        elif self.reset_mode == 'hard':
+            self.v = self.v - spike_d * self.norm
+
         if self.state_clip is not None:
             self.v = torch.clamp(self.v, self.state_clip[0], self.state_clip[1])
 
@@ -126,7 +135,7 @@ class MILIF(neuron.BaseNode):
 
     def multi_step_forward(self, x_seq: torch.Tensor):
         if x_seq.shape[0] != self.T:
-            raise RuntimeError(f'input batch should have the same time length as defined T: {x_seq.shape}')
+            raise RuntimeError(f'input batch should have the same time length as defined T: {x_seq.shape}, {self.T}')
 
         if self.store_v_seq:
             v_seq = []
@@ -164,7 +173,7 @@ if __name__ == '__main__':
     n = MILIF(min_v=0, max_v=4,
                   t = 1, decay=True,
                   decay_rate=0.25, state_clip=(0, 4),
-                  learnable_decay=False, mem=True, store_v_seq=True)
+                  learnable_decay=False, mem=True, store_v_seq=True, step_mode='s')
     # the first forward
     dummy = torch.ones(1, 5, 3, 18, 18)
     y = n(dummy)

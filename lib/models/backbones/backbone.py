@@ -2,13 +2,13 @@ import math
 from lib.models.backbones.blocks import *
 from timm.layers import trunc_normal_
 from functools import partial
-from lib.models.backbones.neuron import MILIF
+from lib.models.neuron import MILIF
 
 class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
     def __init__(
             self,
             t: int,
-            in_channels=2,
+            in_channels=3,
             embed_dim:list =None,
             num_heads=8,
             mlp_ratio=4,
@@ -246,14 +246,64 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
 
         y = y.flatten(3)
         y = y[..., :320]
-        aux_dict = {"attn": None}
 
-        return y, aux_dict  # [T, B, 320, 320]
+        return y  # [T, B, 320, 320](T,B,C,N)
 
-def mastrack(t):
-    # 14,880,033 with learnable decay and pad
-    # 14,880,032 with learnable decay
-    # 14,879,872 with nothing
+def build_backbone_tiny(t):
+    # when t = 1
+    # 2,197,497 with pad
+    # 2,197,577 with learnable decay and pad
+    model = Spiking_vit_MetaFormer_Spike_SepConv(
+        t=t,
+        in_channels=3,
+        embed_dim=[24, 48, 96, 128],
+        num_heads=8,
+        mlp_ratio=4,
+        lambda_ratio=4,
+        learnable_pad = True,
+        cross=False,
+        neuron_factory=ILIF_layer,
+    )
+    return model
+
+def build_backbone_small(t):
+    # when t = 1
+    # 4,192,225 with pad
+    # 4,192,305 with learnable decay and pad
+    model = Spiking_vit_MetaFormer_Spike_SepConv(
+        t=t,
+        in_channels=3,
+        embed_dim=[32, 64, 128, 192],
+        num_heads=8,
+        mlp_ratio=4,
+        lambda_ratio=4,
+        learnable_pad = True,
+        cross=False,
+        neuron_factory=ILIF_layer,
+    )
+    return model
+
+def build_backbone_medium(t):
+    # when t = 1
+    # 8,390,881 with pad
+    # 8,390,961 with learnable decay and pad
+    model = Spiking_vit_MetaFormer_Spike_SepConv(
+        t=t,
+        in_channels=3,
+        embed_dim=[48, 96, 192, 240],
+        num_heads=8,
+        mlp_ratio=4,
+        lambda_ratio=4,
+        learnable_pad = True,
+        cross=False,
+        neuron_factory=ILIF_layer,
+    )
+    return model
+
+def build_backbone_large(t):
+    # when t = 1
+    # 14,879,873 with pad
+    # 14,879,953 with learnable decay and pad
     model = Spiking_vit_MetaFormer_Spike_SepConv(
         t=t,
         in_channels=3,
@@ -261,30 +311,31 @@ def mastrack(t):
         num_heads=8,
         mlp_ratio=4,
         lambda_ratio=4,
-        learnable_pad = False,
+        learnable_pad = True,
         cross=False,
-        neuron_factory=MILIF_layer,
+        neuron_factory=ILIF_layer,
     )
     return model
 
-MILIF_layer = partial(MILIF,
-                      min_v=0.,
-                      max_v=4.0,
-                      norm=None,
-                      t=None,
-                      decay=True,
-                      decay_rate=0.25,
-                      state_clip=(-0.5, 4),
-                      learnable_decay=False,
-                      mem=True,
-                      infere_mode=False,
-                      detach_reset=True,
-                      store_v_seq=False)
+ILIF_layer = partial(MILIF,
+                     min_v=0.,
+                     max_v=4.0,
+                     norm=None,
+                     t=None,
+                     decay=True,
+                     decay_rate=0.25,
+                     state_clip=(-0.5, 4),
+                     learnable_decay=True,
+                     mem=False,
+                     infere_mode=False,
+                     detach_reset=True,
+                     store_v_seq=False,
+                     reset_mode='hard')
 
 if __name__ == '__main__':
     from spikingjelly.activation_based.monitor import OutputMonitor, GradInputMonitor
     with torch.inference_mode():
-        model = mastrack(t=3)
+        model = build_backbone_large(t=1)
         model.to('cuda:0')
         num_p = 0
         for p in model.parameters():
@@ -294,12 +345,12 @@ if __name__ == '__main__':
         output_monitor = OutputMonitor(model, nn.Conv2d)
         grad_monitor = GradInputMonitor(model, MILIF)
 
-        dummy_t = torch.randn(3, 10, 3, 128, 128, device=torch.device('cuda:0'))
-        dummy_s = torch.ones(3, 10, 3, 256, 256, device=torch.device('cuda:0'))
-        y, _ = model(dummy_s, dummy_t)
+        dummy_t = torch.randn(1, 10, 3, 128, 128, device=torch.device('cuda:0'))
+        dummy_s = torch.ones(1, 10, 3, 256, 256, device=torch.device('cuda:0'))
+        y  = model(dummy_s, dummy_t)
         print(f'output shape: {y.shape}')
         y = y[..., :256]
-        y = y.reshape((3, 10, 320, 16, 16))
+        y = y.reshape((1, 10, 320, 16, 16))
         y = y.mean(dim=2, keepdim=True)
         print(f'search space and compressed into 1 channel: {y.shape}')
         print(y.max(), y.min())
