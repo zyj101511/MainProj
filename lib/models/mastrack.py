@@ -130,6 +130,7 @@ def build_model(cfg, training=True):
 
     # 输出模型的总参数量
     # when t = 1
+    # 19,289,414 with learnable pad.
     # 19,289,419 with learnable decay in multi_timescale_module, learnable pad.
     # 19,289,431 with learnable decay in head and multi_timescale_module, learnable pad
     # 19,289,499 with learnable decay in backbone and multi_timescale_module, learnable pad
@@ -146,8 +147,8 @@ if __name__ == '__main__':
     net = build_model(cfg, training=False)
     net.to('cuda')
 
-    dummy_search = torch.randn(1, 32, 3, 256, 256).to('cuda')
-    dummy_template = torch.randn(1, 32, 3, 128, 128).to('cuda')
+    dummy_search = torch.randn(1, 8, 3, 256, 256).to('cuda')
+    dummy_template = torch.randn(1, 8, 3, 128, 128).to('cuda')
     import time
     with torch.inference_mode():
         start = time.time()

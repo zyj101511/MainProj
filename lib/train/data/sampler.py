@@ -145,16 +145,45 @@ if __name__ == '__main__':
     from lib.train.data.dataset import FE108Dataset
     dataset = FE108Dataset(root='/home/yanjiezhang/Downloads/Dissertation/dataset/FE108_nbinsGTP_lmdb',
                            split='train', search_out_sz=256, template_out_sz=128,
-                           scale_factor=1.5, scale_jitter_factor=0.3)
+                           scale_factor=1.2, scale_jitter_factor=0.3)
 
-    L_candidates = [1]
+    L_candidates = [100]
 
-    batch_sampler = DistributedTrackingPredSampler(dataset, 8, 100,
-                                        L_candidates, P=5, distance_factor=4, T=1)
+    batch_sampler = TrackingPredSampler(dataset, 1, 100,
+                                        L_candidates, P=10, distance_factor=20, T=1)
 
     train_loader = DataLoader(dataset=dataset, batch_sampler=batch_sampler)
     batch = next(iter(train_loader))
     print(len(batch))
     print(batch['search'].shape)  # (B, L, T, C, H, W)
-    print(batch['search_anno'].shape)
+    print(batch['search_anno'].shape)  # (B, L, 4)
     print(batch['template'].shape)
+
+    permuted_batch = batch['search'].permute(1, 2, 0, 4, 5, 3)  # (L, T, B, H, W, C)
+    permuted_anno = batch['search_anno'].permute(1, 0, 2)  # (L, B, 4)
+    L, T, B,  = permuted_batch.shape[:3]
+    for l in range(L):
+        for t in range(T):
+            for b in range(B):
+                import cv2
+                img = permuted_batch[l, t, b].contiguous().numpy()
+                from lib.utils.box_ops import box_xywh_to_xyxy
+                anno = box_xywh_to_xyxy(permuted_anno[l, b])
+
+                # 后面10个真实框中心点
+                for k in range(1, 11):
+                    future_anno = permuted_anno[l + k, b]  # xywh
+                    cx = future_anno[0] + future_anno[2] / 2
+                    cy = future_anno[1] + future_anno[3] / 2
+
+                    cv2.circle(
+                        img,
+                        (int(cx), int(cy)),
+                        1,
+                        (255, 255, 255),
+                        -1
+                    )
+
+                cv2.imshow(f'b', img)
+                cv2.waitKey(100)
+    cv2.destroyAllWindows()

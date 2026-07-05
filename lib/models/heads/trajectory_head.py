@@ -41,17 +41,19 @@ y = conv(x)
 print(y.shape)
 '''
 
-class CenterPredictor(nn.Module):
+class TrajectoryPredictor(nn.Module):
     '''
     bbox pred: normalized (cx, cy, w, h)
     '''
-    def __init__(self, in_channel=64, hidden_channel=256, search_feat_size=20, stride=16):
+    def __init__(self, in_channel=64, hidden_channel=256, search_feat_size=20, stride=16, P=4, distance_factor=4):
         super().__init__()
         self.feat_sz = search_feat_size
         self.stride=stride
         self.img_sz =  self.feat_sz * self.stride
         self.in_channel = in_channel
         self.hidden_channel = hidden_channel
+        self.P = P
+        self.df = distance_factor
 
         # center predict
         self.conv1_ctr = _conv(in_channels=self.in_channel, out_channels=self.hidden_channel)
@@ -150,14 +152,18 @@ class CenterPredictor(nn.Module):
 def build_head(cfg, t, feat_dim):
 
     stride = cfg.MODEL.BACKBONE.STRIDE
+    df = cfg.MODEL.HEAD.DISTANCE_FACTOR
+    P = cfg.MODEL.HEAD.P
     if cfg.MODEL.HEAD.TYPE == "CENTER":
         in_channel = feat_dim
         out_channel = cfg.MODEL.HEAD.NUM_CHANNELS
         feat_sz = int(cfg.DATA.SEARCH.SIZE / stride)
-        center_head = CenterPredictor(in_channel=in_channel,
-                                      hidden_channel=out_channel,
-                                      search_feat_size=feat_sz,
-                                      stride=stride)
+        center_head = TrajectoryPredictor(in_channel=in_channel,
+                                          hidden_channel=out_channel,
+                                          search_feat_size=feat_sz,
+                                          stride=stride,
+                                          P=P,
+                                          distance_factor=df)
         return center_head
     else:
         raise ValueError(f"HEAD TYPE {cfg.MODEL.HEAD_TYPE} is not supported.")
@@ -173,7 +179,7 @@ if __name__ == '__main__':
     H = 24
     W = 24
 
-    head = CenterPredictor(
+    head = TrajectoryPredictor(
         in_channel=C,
         hidden_channel=256,
         search_feat_size=H,

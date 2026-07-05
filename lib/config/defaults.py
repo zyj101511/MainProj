@@ -56,6 +56,8 @@ class _Backbone:
 class _Head:
     TYPE: str  # 输出头类型: CENTER, CORNER
     NUM_CHANNELS: int  # 中间层通道数
+    P: int  # 轨迹头的预测距离, P是短距离
+    DISTANCE_FACTOR: int  # 距离因子, P*DISTANCE_FACTOR是预测的长距离
 
 @dataclass
 class _Multi_Timescale_Memory:
@@ -78,7 +80,9 @@ class _MODEL:
     ))
     HEAD: _Head = field(default_factory=lambda: _Head(
         TYPE = 'CENTER',
-        NUM_CHANNELS = 256
+        NUM_CHANNELS = 256,
+        P = 5,
+        DISTANCE_FACTOR = 4
     ))
     def __post_init__(self):
         if self.NEURON == 'MILIF' and (not isinstance(self.D, int) or self.D <= 0):
@@ -109,6 +113,7 @@ class _LOSS:
 class _TRAIN:
     EPOCH: int = 100
     BATCH_SIZE: int = 8
+    L: list = field(default_factory=lambda: [1, 5, 10, 15])  # 训练时, 采样序列的长度, 训练时会随机选择一个长度
     NUM_WORKERS: int = 0  # Dataloader用多少个子进程
     OPTIMIZER: _OPTIMIZER = field(default_factory=_OPTIMIZER)
     LOSS: _LOSS = field(default_factory=_LOSS)
