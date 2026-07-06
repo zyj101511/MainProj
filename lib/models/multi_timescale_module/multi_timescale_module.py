@@ -44,3 +44,15 @@ class build_multi_timescale_module(nn.Module):
         branches_out_list = self.multi_timescale_memory_block(x)  # list of (1, B, C, H, W)
         fused_out = self.cross_timescale_fuse_block(branches_out_list)  # (1, B, C, H, W)
         return fused_out.squeeze(0)  # (B, C, H, W)
+
+if __name__ == '__main__':
+    import torch
+    t = 4
+    B = 2
+    C = 3
+    H = 8
+    W = 8
+    x = torch.rand(t, B, C, H, W)
+    multi_timescale_module = build_multi_timescale_module(t=t, in_channels=C, num_branch=4, num_layer=1)
+    out = multi_timescale_module(x)
+    print(out.shape)  # (B, C, H, W)

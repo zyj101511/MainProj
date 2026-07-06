@@ -43,7 +43,16 @@ class Multi_Timescale_Memory_Block(nn.Module):
                           in_channels=in_channels, num_layers=num_layers)
             for _ in range(num_branch)
         ])
-
+        self.branch_gates = nn.ModuleList(
+            [
+                SeqToANNContainer(
+                    nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, bias=False),
+                    nn.BatchNorm2d(in_channels),
+                    nn.Sigmoid(),
+                )
+                for _ in range(num_branch)
+            ]
+        )
 
     def forward(self, x):  # (T, B, C, H, W)
         x = x.permute(1, 2, 0, 3, 4)  # (B, C, T, H, W)
@@ -52,8 +61,11 @@ class Multi_Timescale_Memory_Block(nn.Module):
         x = x.permute(2, 0, 1, 3, 4)  # (1, B, C, H, W)
 
         x = self.spike1(x)
-
-        branches_out_list = [branch(x) for branch in self.branches]
+        branches_out_list = []
+        for gate, branch in zip(self.branch_gates, self.branches):
+            g = gate(x)
+            x_i = x * (1 + g)
+            branches_out_list.append(branch(x_i))
         return branches_out_list
 
 

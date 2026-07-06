@@ -10,7 +10,7 @@ class _conv(nn.Module):
         self.spike = MILIF(min_v=0.,
                            max_v=4.0,
                            norm=None,
-                           decay=True,
+                           decay=False,
                            decay_rate=0.25,
                            state_clip=(-0.5, 4),
                            learnable_decay=False,
@@ -45,56 +45,49 @@ class CenterPredictor(nn.Module):
     '''
     bbox pred: normalized (cx, cy, w, h)
     '''
-    def __init__(self, in_channel=64, hidden_channel=256, search_feat_size=20, stride=16):
+    def __init__(self, in_channels=64, hidden_channels=256, search_feat_size=20, stride=16):
         super().__init__()
         self.feat_sz = search_feat_size
         self.stride=stride
         self.img_sz =  self.feat_sz * self.stride
-        self.in_channel = in_channel
-        self.hidden_channel = hidden_channel
+        self.in_channels = in_channels
+        self.hidden_channels = hidden_channels
 
         # center predict
-        self.conv1_ctr = _conv(in_channels=self.in_channel, out_channels=self.hidden_channel)
-        self.conv2_ctr = _conv(in_channels=self.hidden_channel, out_channels=self.hidden_channel // 2)
-        self.conv3_ctr = _conv(in_channels=self.hidden_channel // 2, out_channels=self.hidden_channel // 4)
-        self.conv4_ctr = _conv(in_channels=self.hidden_channel // 4, out_channels=self.hidden_channel // 8)
-        self.conv5_ctr = nn.Conv2d(in_channels=self.hidden_channel // 8, out_channels=1, kernel_size=1)
+        self.conv1_ctr = _conv(in_channels=self.in_channels, out_channels=self.hidden_channels)
+        self.conv2_ctr = _conv(in_channels=self.hidden_channels, out_channels=self.hidden_channels // 2)
+        self.conv3_ctr = _conv(in_channels=self.hidden_channels // 2, out_channels=self.hidden_channels // 4)
+        self.conv4_ctr = _conv(in_channels=self.hidden_channels // 4, out_channels=self.hidden_channels // 8)
+        self.conv5_ctr = nn.Conv2d(in_channels=self.hidden_channels // 8, out_channels=1, kernel_size=1)
 
         # offset regress
-        self.conv1_offset = _conv(in_channels=self.in_channel, out_channels=self.hidden_channel)
-        self.conv2_offset = _conv(in_channels=self.hidden_channel, out_channels=self.hidden_channel // 2)
-        self.conv3_offset = _conv(in_channels=self.hidden_channel // 2, out_channels=self.hidden_channel // 4)
-        self.conv4_offset = _conv(in_channels=self.hidden_channel // 4, out_channels=self.hidden_channel // 8)
-        self.conv5_offset = nn.Conv2d(in_channels=self.hidden_channel // 8, out_channels=2, kernel_size=1)
+        self.conv1_offset = _conv(in_channels=self.in_channels, out_channels=self.hidden_channels)
+        self.conv2_offset = _conv(in_channels=self.hidden_channels, out_channels=self.hidden_channels // 2)
+        self.conv3_offset = _conv(in_channels=self.hidden_channels // 2, out_channels=self.hidden_channels // 4)
+        self.conv4_offset = _conv(in_channels=self.hidden_channels // 4, out_channels=self.hidden_channels // 8)
+        self.conv5_offset = nn.Conv2d(in_channels=self.hidden_channels // 8, out_channels=2, kernel_size=1)
 
         # size regress
-        self.conv1_size = _conv(in_channels=self.in_channel, out_channels=self.hidden_channel)
-        self.conv2_size = _conv(in_channels=self.hidden_channel, out_channels=self.hidden_channel // 2)
-        self.conv3_size = _conv(in_channels=self.hidden_channel // 2, out_channels=self.hidden_channel // 4)
-        self.conv4_size = _conv(in_channels=self.hidden_channel // 4, out_channels=self.hidden_channel // 8)
-        self.conv5_size = nn.Conv2d(in_channels=self.hidden_channel // 8, out_channels=2, kernel_size=1)
+        self.conv1_size = _conv(in_channels=self.in_channels, out_channels=self.hidden_channels)
+        self.conv2_size = _conv(in_channels=self.hidden_channels, out_channels=self.hidden_channels // 2)
+        self.conv3_size = _conv(in_channels=self.hidden_channels // 2, out_channels=self.hidden_channels // 4)
+        self.conv4_size = _conv(in_channels=self.hidden_channels // 4, out_channels=self.hidden_channels // 8)
+        self.conv5_size = nn.Conv2d(in_channels=self.hidden_channels // 8, out_channels=2, kernel_size=1)
 
         for p in self.parameters():  # 除了batchnorm, 把conv都初始化
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
 
-    def forward(self, feature, gt_score_map=None, return_max_score=False):  #  (B, C, H, W)
+    def forward(self, feature):  #  (B, C, H, W)
         # (B, 1, H, W) (B, 2, H, W) (B, 2, H, W)
         score_map_ctr, offset_map, size_map = self.get_score_map(feature)
+        bbox, idx = self.cal_bbox(score_map_ctr, offset_map, size_map)  # (B, 4), 4:(cx, cy, w, h)
+        return bbox, score_map_ctr, offset_map, size_map, idx
 
-        if gt_score_map is None:
-            bbox, max_score = self.cal_bbox(score_map_ctr, offset_map, size_map, return_max_score)  # (B, 4), 4:(cx, cy, w, h)
-        else:
-            bbox, max_score = self.cal_bbox(gt_score_map, offset_map, size_map, return_max_score)
-        return bbox, score_map_ctr, offset_map, size_map, max_score
-
-    def cal_bbox(self, score_map_ctr, offset_map, size_map,
-                 return_max_score=False):  # (B, 1, H, W) (B, 2, H, W) (B, 2, H, W)
-        cx, cy, _, _, w, h, max_score = self.get_pred(score_map_ctr, offset_map, size_map)
+    def cal_bbox(self, score_map_ctr, offset_map, size_map):  # (B, 1, H, W) (B, 2, H, W) (B, 2, H, W)
+        cx, cy, _, _, w, h, idx = self.get_pred(score_map_ctr, offset_map, size_map)
         bbox = torch.cat([cx, cy, w, h], dim=-1)
-        if return_max_score:
-            return bbox, max_score
-        return bbox, None  # (B, 4), 4:(cx, cy, w, h)
+        return bbox, idx  # (B, 4), 4:(cx, cy, w, h)
 
     def get_score_map(self, x):
         def _clamp_sigmoid(x):
@@ -122,22 +115,25 @@ class CenterPredictor(nn.Module):
         x_size4 = self.conv4_size(x_size3)
         score_map_size = self.conv5_size(x_size4)
         # (B, 1, H, W) (B, 2, H, W) (B, 2, H, W)
+        # offset要不要归一化到[-1, 1]?
         return _clamp_sigmoid(score_map_ctr), 2*_clamp_sigmoid(score_map_offset)-1, _clamp_sigmoid(score_map_size)
+
+    def get_idx(self, score_map_ctr):
+        score_map_ctr = score_map_ctr.squeeze(1)  # (B, H, W)
+        _, idx = torch.max(score_map_ctr.flatten(1), dim=-1, keepdim=True)  # (B, 1)
+        idx_y = idx // self.feat_sz
+        idx_x = idx % self.feat_sz
+        idx = idx.unsqueeze(1).expand(idx.shape[0], 2, 1)  # (B, 2, 1)
+        return idx, idx_x, idx_y
 
     def get_pred(self, score_map_ctr, offset_map, size_map):
         """
-        return normalized cx, cy, offset_X, offset_y, w, h and max_score
+        return normalized cx, cy, offset_X, offset_y, w, h and idx
         """
         # (B, 1, H, W) (B, 2, H, W) (B, 2, H, W)
-        score_map_ctr = score_map_ctr.squeeze(1)  # (B, H, W)
-        max_score, idx = torch.max(score_map_ctr.flatten(1), dim=-1, keepdim=True)  # (B, 1)
-        idx_y = idx // self.feat_sz
-        idx_x = idx % self.feat_sz
-        # idx (B, 1)
-        idx = idx.unsqueeze(1).expand(idx.shape[0], 2, 1)  # (B, 2, 1)
+        idx, idx_x, idx_y = self.get_idx(score_map_ctr)
         offset = offset_map.flatten(2).gather(dim=-1, index=idx)  # (B, 2, 1)
         size = size_map.flatten(2).gather(dim=-1, index=idx) # (B, 2, 1)
-
         ctr_x = ((idx_x.to(torch.float) + offset[..., 0, :]) / self.feat_sz)
         ctr_y = ((idx_y.to(torch.float) + offset[..., 1, :]) / self.feat_sz)
         offset_x = offset[..., 0, :] / self.feat_sz
@@ -145,17 +141,17 @@ class CenterPredictor(nn.Module):
         size_w = size[..., 0, :]
         size_h = size[..., 1, :]
         # (B, 1)
-        return ctr_x, ctr_y, offset_x, offset_y, size_w, size_h, max_score
+        return ctr_x, ctr_y, offset_x, offset_y, size_w, size_h, idx
 
-def build_head(cfg, feat_dim):
+def build_track_head(cfg, feat_dim):
 
     stride = cfg.MODEL.BACKBONE.STRIDE
     if cfg.MODEL.HEAD.TYPE == "CENTER":
-        in_channel = feat_dim
-        out_channel = cfg.MODEL.HEAD.NUM_CHANNELS
+        in_channels = feat_dim
+        out_channels = cfg.MODEL.HEAD.NUM_CHANNELS
         feat_sz = int(cfg.DATA.SEARCH.SIZE / stride)
-        center_head = CenterPredictor(in_channel=in_channel,
-                                      hidden_channel=out_channel,
+        center_head = CenterPredictor(in_channels=in_channels,
+                                      hidden_channels=out_channels,
                                       search_feat_size=feat_sz,
                                       stride=stride)
         return center_head
@@ -174,8 +170,8 @@ if __name__ == '__main__':
     W = 24
 
     head = CenterPredictor(
-        in_channel=C,
-        hidden_channel=256,
+        in_channels=C,
+        hidden_channels=256,
         search_feat_size=H,
         stride=16
     ).to(device)
@@ -185,15 +181,13 @@ if __name__ == '__main__':
     feature = torch.randn(B, C, H, W, device=device)
 
     with torch.inference_mode():
-        bbox, score_map_ctr, offset_map, size_map, max_score = head(
-            feature,
-            gt_score_map=None,
-            return_max_score=True
+        bbox, score_map_ctr, offset_map, size_map, idx = head(
+            feature
         )
 
         print('====== forward output ======')
         print('bbox:', bbox.shape)  # (B, 4)
-        print('max_score:', max_score.shape)  # (B, 1)
+        print('idx:', idx.shape)  # (B, 1)
         print('score_map_ctr:', score_map_ctr.shape)  # (B, 1, H, W)
         print('offset_map:', offset_map.shape)  # (B, 2, H, W)
         print('size_map:', size_map.shape)  # (B, 2, H, W)
@@ -211,7 +205,7 @@ if __name__ == '__main__':
         # 如果要测试 get_pred / cal_bbox，需要用完整 T 维输出
         score_map_ctr_full, offset_map_full, size_map_full = head.get_score_map(feature)
 
-        cx, cy, offset_x, offset_y, size_w, size_h, max_score2 = head.get_pred(
+        cx, cy, offset_x, offset_y, size_w, size_h, idx = head.get_pred(
             score_map_ctr_full,
             offset_map_full,
             size_map_full
@@ -224,18 +218,17 @@ if __name__ == '__main__':
         print('offset_y:', offset_y.shape)  # (B, 1)
         print('size_w:', size_w.shape)  # (B, 1)
         print('size_h:', size_h.shape)  # (B, 1)
-        print('max_score2:', max_score2.shape)  # (B, 1)
+        print('idx:', idx.shape)  # (B, 1)
 
-        bbox_t, max_score3 = head.cal_bbox(
+        bbox_t, idx = head.cal_bbox(
             score_map_ctr_full,
             offset_map_full,
             size_map_full,
-            return_max_score=True
         )
 
         print('\n====== cal_bbox output ======')
         print('bbox_t:', bbox_t.shape)  # (B, 4)
-        print('max_score3:', max_score3.shape)  # (B, 1)
+        print('idx:', idx.shape)  # (B, 1)
         print('bbox_t example:', bbox_t[0, 0])
 
     num_p = sum(p.numel() for p in head.parameters())

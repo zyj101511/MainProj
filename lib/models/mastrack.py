@@ -1,29 +1,31 @@
 import torch
 from torch import nn
 from pathlib import Path
-from lib.models.heads.track_head import build_head
+from lib.models.heads.track_head import build_track_head
+from lib.models.heads.trajectory_head import build_trajectory_head
 from lib.models.backbones.backbone import build_backbone_large, build_backbone_medium, build_backbone_small, build_backbone_tiny
 from lib.models.multi_timescale_module.multi_timescale_module import build_multi_timescale_module
 
 
 class MASTrack(nn.Module):
-    def __init__(self, backbone, multi_timescale_module, head, head_type='CENTER'):
+    def __init__(self, backbone, multi_timescale_module, track_head, trajectory_head, head_type='CENTER'):
         super().__init__()
         self.backbone = backbone
         self.multi_timescale_module = multi_timescale_module
-        self.head = head
+        self.track_head = track_head
+        self.trajectory_head = trajectory_head
         self.head_type = head_type
 
         if head_type in ('CENTER'):
             # head期望的search输入尺寸和元素个数, 用来从backbone输出feature map中裁切出search
-            self.search_feature_size = int(head.feat_sz)
+            self.search_feature_size = int(self.track_head.feat_sz)
             self.search_feature_len = int(self.search_feature_size ** 2)
 
     def forward(self, template: torch.Tensor, search: torch.Tensor, return_max_score=False):
         # 无论单步还是多步, backbone输入都是5D(T, B, C, H, W), 输出是4D(T, B, C, N) N=template tokens + search tokens
         features = self.backbone(template=template, search=search)
         fused_feature = self._forward_multi_timescale_module(feature=features)
-        out_dict = self._forward_head(fused_feature=fused_feature, return_max_score=return_max_score)
+        out_dict = self._forward_head(fused_feature=fused_feature)
         # 记录backbone和multi_timescale_module的输出特征
         out_dict['backbone_feature'] = features
         out_dict['fused_feature'] = fused_feature
@@ -43,16 +45,21 @@ class MASTrack(nn.Module):
         fused_feature = self.multi_timescale_module(search_feature)  # (B, C, H, W)
         return fused_feature
 
-    def _forward_head(self, fused_feature: torch.Tensor, return_max_score):
+    def _forward_head(self, fused_feature: torch.Tensor):
         if self.head_type == 'CENTER':
             # (B, 4), (B, 2, H, W), (B, 2, H, W), (B, 1, H, W)
-            pred_box, score_map_ctr, offset_map, size_map, max_score = self.head(feature=fused_feature,
-                                                                                 return_max_score=return_max_score)
+            pred_box, score_map_ctr, offset_map, size_map, idx = self.track_head(feature=fused_feature)
+            near_future_ctr, cur_v, cur_a, a_deltas = self.trajectory_head(feature=fused_feature, track_idx=idx)
             out_dict = {'pred_boxes': pred_box,
                         'score_map': score_map_ctr,
                         'offset_map': offset_map,
                         'size_map' : size_map,
-                        'max_score': max_score}
+                        'near_future_ctr': near_future_ctr,
+                        'cur_v': cur_v,
+                        'cur_a': cur_a,
+                        'a_deltas': a_deltas,
+                        'track_idx': idx
+                        }
             return out_dict
         else:
             raise NotImplementedError(f'Selected head type is not implemented: {self.head_type}')
@@ -65,31 +72,32 @@ def _build_all_modules(cfg, t):
         multi_timescale_module = build_multi_timescale_module(t=t, in_channels=feat_dim,
                                                               num_branch=cfg.MODEL.MULTI_TIMESCALE_MODULE.NUM_BRANCHES,
                                                               num_layer=cfg.MODEL.MULTI_TIMESCALE_MODULE.NUM_LAYERS)
-        head = build_head(cfg, feat_dim=feat_dim)
+        track_head = build_track_head(cfg, feat_dim=feat_dim)
     elif cfg.MODEL.BACKBONE.TYPE == 'SMALL':
         backbone = build_backbone_small(t=t)
         feat_dim = backbone.embed_dim
         multi_timescale_module = build_multi_timescale_module(t=t, in_channels=feat_dim,
                                                               num_branch=cfg.MODEL.MULTI_TIMESCALE_MODULE.NUM_BRANCHES,
                                                               num_layer=cfg.MODEL.MULTI_TIMESCALE_MODULE.NUM_LAYERS)
-        head = build_head(cfg, feat_dim=feat_dim)
+        track_head = build_track_head(cfg, feat_dim=feat_dim)
     elif cfg.MODEL.BACKBONE.TYPE == 'MEDIUM':
         backbone = build_backbone_medium(t=t)
         feat_dim = backbone.embed_dim
         multi_timescale_module = build_multi_timescale_module(t=t, in_channels=feat_dim,
                                                               num_branch=cfg.MODEL.MULTI_TIMESCALE_MODULE.NUM_BRANCHES,
                                                               num_layer=cfg.MODEL.MULTI_TIMESCALE_MODULE.NUM_LAYERS)
-        head = build_head(cfg, feat_dim=feat_dim)
+        track_head = build_track_head(cfg, feat_dim=feat_dim)
     elif cfg.MODEL.BACKBONE.TYPE == 'LARGE':
         backbone = build_backbone_large(t=t)
         feat_dim = backbone.embed_dim
         multi_timescale_module = build_multi_timescale_module(t=t, in_channels=feat_dim,
                                                               num_branch=cfg.MODEL.MULTI_TIMESCALE_MODULE.NUM_BRANCHES,
                                                               num_layer=cfg.MODEL.MULTI_TIMESCALE_MODULE.NUM_LAYERS)
-        head = build_head(cfg, feat_dim=feat_dim)
+        track_head = build_track_head(cfg, feat_dim=feat_dim)
     else:
         raise NotImplementedError(f'Model Type {cfg.MODEL.BACKBONE.TYPE} not implemented')
-    return backbone, multi_timescale_module, head
+    trajectory_head = build_trajectory_head(cfg, feat_dim=feat_dim)
+    return backbone, multi_timescale_module, track_head, trajectory_head
 
 # 计算参数总量
 def _count_parameters(model):
@@ -101,12 +109,13 @@ def build_model(cfg, training=True):
     pretrained_path = current_dir.parents[1] / 'pretrained_models'
     # print(str(current_dir))
     # print(str(pretrained_path))
-    backbone, multi_timescale_module, head = _build_all_modules(cfg, t=cfg.MODEL.T)
+    backbone, multi_timescale_module, track_head, trajectory_head = _build_all_modules(cfg, t=cfg.MODEL.T)
 
     model = MASTrack(
         backbone=backbone,
         multi_timescale_module=multi_timescale_module,
-        head=head,
+        track_head=track_head,
+        trajectory_head=trajectory_head,
         head_type=cfg.MODEL.HEAD.TYPE,
     )
 
@@ -129,13 +138,21 @@ def build_model(cfg, training=True):
         print('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
 
     # 输出模型的总参数量
-    # when t = 1
+    # when t = 1, branch=4, layer=1 without gate
     # 19,289,414 with learnable pad.
     # 19,289,419 with learnable decay in multi_timescale_module, learnable pad.
     # 19,289,431 with learnable decay in head and multi_timescale_module, learnable pad
     # 19,289,499 with learnable decay in backbone and multi_timescale_module, learnable pad
     # 19,289,511 with learnable decay in all modules, learnable pad
     # the number of learnable decay parameters in backbone: 80, multi_timescale_module: 5, head: 12
+
+    # when t = 1, branch=4, layer=1 with gate
+    # 19,701,574 with learnable pad.
+    # 19,701,579 with learnable decay in multi_timescale_module, learnable pad.
+    # 19,701,597 with learnable decay in head and multi_timescale_module, learnable pad
+    # 19,701,659 with learnable decay in backbone and multi_timescale_module, learnable pad
+    # 19,701,671 with learnable decay in all modules, learnable pad
+
     print()
     print(f"Total number of parameters: {_count_parameters(model):,}")
 
@@ -152,7 +169,7 @@ if __name__ == '__main__':
     import time
     with torch.inference_mode():
         start = time.time()
-        y = net(search=dummy_search, template=dummy_template, return_max_score=False)
+        y = net(search=dummy_search, template=dummy_template)
         print(time.time() - start)
 
     for key in y.keys():
