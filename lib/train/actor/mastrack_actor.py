@@ -32,7 +32,7 @@ class MASTrackActor(BaseActor):
         return total_loss, detailed_loss
 
     def forward_pass(self, data_dict):
-        # (B, L, T, C, H, W)
+        # template, search: (B, L, T, C, H, W), search_anno: (B, L, 4)
         assert 'template' in data_dict and 'search' in data_dict and 'search_anno' in data_dict
 
         search_img = data_dict['search'][0]  # (T, B, C, H, W)

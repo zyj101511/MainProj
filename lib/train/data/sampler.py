@@ -184,7 +184,8 @@ if __name__ == '__main__':
                         (255, 255, 255),
                         -1
                     )
-
+                cv2.rectangle(img, (int(anno[0]), int(anno[1])),
+                              (int(anno[2]), int(anno[3])), (0, 255, 0), 1)
                 cv2.imshow(f'b', img)
                 cv2.waitKey(100)
     cv2.destroyAllWindows()
