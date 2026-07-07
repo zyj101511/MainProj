@@ -7,7 +7,7 @@ from lib.train.data.utils.preprocessing import Preprocessor
 class FE108Dataset(BaseSeqDataset):
     """ Base class for video datasets """
 
-    def __init__(self, root, split: str, search_out_sz, template_out_sz, scale_factor, scale_jitter_factor):
+    def __init__(self, root, split: str, search_out_sz=256, template_out_sz=128, scale_factor=1.5, scale_jitter_factor=0.1):
         super().__init__(root, split)
         self.meta = self.json_loader(self.lmdb, f"{split}/meta.json")['videos']
         self.preprocessor = Preprocessor(search_out_sz, template_out_sz, scale_factor, scale_jitter_factor)
@@ -100,7 +100,7 @@ class FE108Dataset(BaseSeqDataset):
 
 if __name__ == '__main__':
     dataset = FE108Dataset(root='/home/yanjiezhang/Downloads/Dissertation/dataset/FE108_nbinsGTP_lmdb',
-                           split='train')
+                           split='train', search_out_sz=256, template_out_sz=128, scale_factor=1.3, scale_jitter_factor=0.1)
     seq_id = 0
     frame_ids = [0, 1, 2]
     print(len(dataset))
@@ -119,7 +119,21 @@ if __name__ == '__main__':
         cv2.imshow('img', img)
         cv2.waitKey(0)
     cv2.destroyAllWindows()
-    item = (seq_id, 0, 5, 5, 4, 1)
+    item = (seq_id, 0, 5, 4, 4, 1)
     data = dataset[item]
-    print(len(data['frames']))
-    print(len(data['annos']))
+    print(data.keys())
+    print(len(data['template']))
+    print(len(data['search_anno']))
+    print(data['search'][0][0].shape)
+    print(data['template'][0][0].shape)
+
+    for l, img in enumerate(data['search'].transpose(1, 0, 2, 3, 4)[0]):
+        img = img.transpose(1, 2, 0) # (C, H, W) -> (H, W, C)
+        img = np.ascontiguousarray(img)
+        gt = data['search_anno'][l]
+        cv2.rectangle(img, (int(gt[0]), int(gt[1])),
+                      (int(gt[0])+int(gt[2]), int(gt[1])+int(gt[3])), (0, 255, 0), 1)
+        for gt in data['search_anno'][l+1:l+5]:
+            cv2.circle(img, (int(gt[0]+gt[2]/2), int(gt[1]+gt[3]/2)), 1, (255, 255, 255), -1)
+        cv2.imshow('img', img)
+        cv2.waitKey(0)

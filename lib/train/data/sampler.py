@@ -161,6 +161,7 @@ if __name__ == '__main__':
 
     permuted_batch = batch['search'].permute(1, 2, 0, 4, 5, 3)  # (L, T, B, H, W, C)
     permuted_anno = batch['search_anno'].permute(1, 0, 2)  # (L, B, 4)
+
     L, T, B,  = permuted_batch.shape[:3]
     for l in range(L):
         for t in range(T):

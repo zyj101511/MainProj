@@ -6,11 +6,10 @@ from lib.utils.heapmap_utils import generate_heatmap
 
 class MASTrackActor(BaseActor):
     """ Actor for training MASTrack models """
-    def __init__(self, net, objective, loss_weight, settings, cfg):
+    def __init__(self, net, objective, loss_weight, cfg):
         super().__init__(net, objective)
         self.loss_weight = loss_weight
-        self.settings = settings
-        self.bs = settings.batch_size
+        self.bs = cfg.TRAIN.BATCH_SIZE
         self.cfg = cfg
 
     def __call__(self, data_dict):
@@ -32,12 +31,12 @@ class MASTrackActor(BaseActor):
 
         return total_loss, detailed_loss
 
-    def forward_pass(self, data):
-        assert len(data['template_images']) == 1
-        assert len(data['search_images']) == 1
+    def forward_pass(self, data_dict):
+        # (B, L, T, C, H, W)
+        assert 'template' in data_dict and 'search' in data_dict and 'search_anno' in data_dict
 
-        search_img = data['search_images'][0]  # (T, B, C, H, W)
-        template_img = data['template_images'][0]  # (T, B, C, H, W)
+        search_img = data_dict['search'][0]  # (T, B, C, H, W)
+        template_img = data_dict['template'][0]  # (T, B, C, H, W)
         net_out_dict = self.net(search=search_img, template=template_img, return_last=True, return_max_score=False)
         return net_out_dict
 
