@@ -21,9 +21,9 @@ class MASTrack(nn.Module):
             self.search_feature_size = int(self.track_head.feat_sz)
             self.search_feature_len = int(self.search_feature_size ** 2)
 
-    def forward(self, template: torch.Tensor, search: torch.Tensor, return_max_score=False):
+    def forward(self, search: torch.Tensor, template: torch.Tensor):
         # 无论单步还是多步, backbone输入都是5D(T, B, C, H, W), 输出是4D(T, B, C, N) N=template tokens + search tokens
-        features = self.backbone(template=template, search=search)
+        features = self.backbone(search=search, template=template)
         fused_feature = self._forward_multi_timescale_module(feature=features)
         out_dict = self._forward_head(fused_feature=fused_feature)
         # 记录backbone和multi_timescale_module的输出特征
@@ -50,14 +50,14 @@ class MASTrack(nn.Module):
             # (B, 4), (B, 2, H, W), (B, 2, H, W), (B, 1, H, W)
             pred_box, score_map_ctr, offset_map, size_map, idx = self.track_head(feature=fused_feature)
             near_future_ctr, cur_v, cur_a, a_deltas = self.trajectory_head(feature=fused_feature, track_idx=idx)
-            out_dict = {'pred_boxes': pred_box,
-                        'score_map': score_map_ctr,
-                        'offset_map': offset_map,
-                        'size_map' : size_map,
-                        'near_future_ctr': near_future_ctr,
-                        'cur_v': cur_v,
-                        'cur_a': cur_a,
-                        'a_deltas': a_deltas,
+            out_dict = {'pred_boxes': pred_box, # (B, 4)
+                        'score_map': score_map_ctr, # (B, 1, H, W)
+                        'offset_map': offset_map, # (B, 2, H, W)
+                        'size_map' : size_map, # (B, 2, H, W)
+                        'near_future_ctr': near_future_ctr, # (B, P, 2)
+                        'cur_v': cur_v, # (B, 2)
+                        'cur_a': cur_a, # (B, 2)
+                        'a_deltas': a_deltas, # (B, df-1, 2)
                         'track_idx': idx
                         }
             return out_dict

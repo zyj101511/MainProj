@@ -9,6 +9,11 @@ def box_cxcywh_to_xyxy(x):
          (x_c + 0.5 * w), (y_c + 0.5 * h)]
     return torch.stack(b, dim=-1)
 
+def box_xywh_to_cxcywh(x):
+    x1, y1, w, h = x.unbind(-1)
+    b = [x1 + 0.5 * w, y1 + 0.5 * h, w, h]
+    return torch.stack(b, dim=-1)
+
 
 def box_xywh_to_xyxy(x):
     x1, y1, w, h = x.unbind(-1)
