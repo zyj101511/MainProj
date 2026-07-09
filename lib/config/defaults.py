@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 class _Dataset:
     DATASETS_NAME: list[str]
     DATASETS_RATIO: list[int]  # 多个数据集的采样比例
-    SAMPLE_PER_EPOCH: int  # 每个epoch采样多少样本
+    SAMPLES_PER_EPOCH: int  # 每个epoch采样多少样本
     def __post_init__(self):
         if len(self.DATASETS_NAME) != len(self.DATASETS_RATIO):
             raise ValueError("DATASETS_NAME and DATASETS_RATIO must have the same length")
@@ -26,13 +26,13 @@ class _DATA:
     TRAIN: _Dataset = field(default_factory=lambda: _Dataset(
         DATASETS_NAME=["FE108", "VisEvent"],
         DATASETS_RATIO=[1, 1],
-        SAMPLE_PER_EPOCH=60000
+        SAMPLES_PER_EPOCH=60000
     ))
     # VAL
     VAL: _Dataset = field(default_factory=lambda: _Dataset(
         DATASETS_NAME=["FE108"],
         DATASETS_RATIO=[1],
-        SAMPLE_PER_EPOCH=5000
+        SAMPLES_PER_EPOCH=5000
     ))
     # SEARCH
     SEARCH: _DataCrop = field(default_factory=lambda: _DataCrop(
@@ -68,8 +68,6 @@ class _Multi_Timescale_Memory:
 class _MODEL:
     NEURON: str = 'LIF'
     T: int = 1 # 神经元的输入步数
-    D: int | None = None# I-LIF的内部状态步数
-    PRETRAINED_FILE: str | None = None
     BACKBONE: _Backbone = field(default_factory=lambda: _Backbone(
         TYPE = 'BASE',
         STRIDE = 16

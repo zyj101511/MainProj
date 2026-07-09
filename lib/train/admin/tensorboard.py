@@ -23,7 +23,7 @@ class TensorboardWriter:
         tb_info_writer.close()
 
     # 是写一些文本信息到 TensorBoard 里
-    def write_epoch(self, stats: OrderedDict, epoch: int, ind=-1):
+    def write_epoch(self, stats, epoch: int, ind=-1):
         for loader_name, loader_stats in stats.items():
             if loader_stats is None:
                 continue

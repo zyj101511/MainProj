@@ -149,18 +149,27 @@ if __name__ == '__main__':
 
     L_candidates = [100]
 
+    from torch.utils.data._utils.collate import default_collate
+    def mas_collate(batch):
+        batch = default_collate(batch)
+        batch['search'] = batch['search'].permute(1, 2, 0, 4, 5, 3).contiguous()  # (L, T, B, H, W, C)
+        batch['template'] = batch['template'].permute(1, 2, 0, 4, 5, 3).contiguous()  # (L, T, B, H, W, C)
+        batch['search_anno'] = batch['search_anno'].permute(1, 0, 2).contiguous()  # (L, B, 4)
+        return batch
     batch_sampler = TrackingPredSampler(dataset, 1, 100,
                                         L_candidates, P=10, distance_factor=20, T=1)
-
-    train_loader = DataLoader(dataset=dataset, batch_sampler=batch_sampler)
+    train_loader = DataLoader(dataset=dataset, batch_sampler=batch_sampler, collate_fn=mas_collate)
     batch = next(iter(train_loader))
+    print(batch.keys())
     print(len(batch))
     print(batch['search'].shape)  # (B, L, T, C, H, W)
     print(batch['search_anno'].shape)  # (B, L, 4)
     print(batch['template'].shape)
 
-    permuted_batch = batch['search'].permute(1, 2, 0, 4, 5, 3)  # (L, T, B, H, W, C)
-    permuted_anno = batch['search_anno'].permute(1, 0, 2)  # (L, B, 4)
+    # permuted_batch = batch['search'].permute(1, 2, 0, 4, 5, 3)  # (L, T, B, H, W, C)
+    # permuted_anno = batch['search_anno'].permute(1, 0, 2)  # (L, B, 4)
+    permuted_batch = batch['search']
+    permuted_anno = batch['search_anno']
 
     L, T, B,  = permuted_batch.shape[:3]
     for l in range(L):

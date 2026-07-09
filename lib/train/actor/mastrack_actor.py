@@ -12,10 +12,10 @@ class MASTrackActor(BaseActor):
         self.bs = cfg.TRAIN.BATCH_SIZE
         self.cfg = cfg
 
-    def __call__(self, data_tuple):
+    def __call__(self, data_dict):
         """
         args:
-            data_tuple: (search, template, search_anno)
+            data_dict: dict containing search, template, and search_anno
             search: (T, B, C, H, W)
             template: (T, B, C, H, W)
             search_anno: (B, 1+P*df, 4) 4:(x, y, w, h)
@@ -23,7 +23,7 @@ class MASTrackActor(BaseActor):
             total_loss    - the total training loss
             detailed_loss  -  dict containing detailed losses
         """
-        search, template, search_anno = data_tuple
+        search, template, search_anno = data_dict['search'], data_dict['template'], data_dict['search_anno']
         # forward pass
         net_out_dict = self.forward_pass(search=search, template=template)
 
