@@ -249,6 +249,11 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
 
         return y  # [T, B, 320, 320](T,B,C,N)
 
+    def reset_neurons(self):
+        for m in self.modules():
+            if isinstance(m, MILIF):
+                m.reset()
+
 def build_backbone_tiny(t):
     # when t = 1
     # 2,197,497 with pad

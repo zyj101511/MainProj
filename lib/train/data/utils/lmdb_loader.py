@@ -18,6 +18,7 @@ def get_lmdb_handle(name):
     global LMDB_HANDLES, LMDB_FILELISTS
     item = LMDB_HANDLES.get(name, None)
     if item is None:
+        print(f"Open LMDB: {name}")
         env = lmdb.open(name, readonly=True, lock=False, readahead=False, meminit=False)
         LMDB_ENVS[name] = env
         item = env.begin(write=False)

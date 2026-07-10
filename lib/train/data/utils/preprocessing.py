@@ -69,6 +69,9 @@ class Preprocessor():
                 crop_w = x2 - x1
                 crop_h = y2 - y1
 
+                if crop_w <= 0 or crop_h <= 0:
+                    continue
+
                 # 先建一个带 padding 的 crop 画布
                 crop = np.zeros((crop_h, crop_w, C), dtype=img.dtype)
 
@@ -77,7 +80,8 @@ class Preprocessor():
                 dst_y1 = src_y1 - y1
                 dst_x2 = dst_x1 + (src_x2 - src_x1)
                 dst_y2 = dst_y1 + (src_y2 - src_y1)
-
+                if src_x2 <= src_x1 or src_y2 <= src_y1 or dst_x2 <= dst_x1 or dst_y2 <= dst_y1:
+                    continue
                 crop[dst_y1:dst_y2, dst_x1:dst_x2] = img[src_y1:src_y2,
                 src_x1:src_x2]
 
@@ -128,8 +132,10 @@ class Preprocessor():
             dst_x2 = dst_x1 + (src_x2 - src_x1)
             dst_y2 = dst_y1 + (src_y2 - src_y1)
 
-            patch[dst_y1:dst_y2, dst_x1:dst_x2] = img[src_y1:src_y2,
-            src_x1:src_x2]
+            if src_x2 <= src_x1 or src_y2 <= src_y1 or dst_x2 <= dst_x1 or dst_y2 <= dst_y1:
+                continue
+
+            patch[dst_y1:dst_y2, dst_x1:dst_x2] = img[src_y1:src_y2,src_x1:src_x2]
 
             patch = cv2.resize(
                 patch,

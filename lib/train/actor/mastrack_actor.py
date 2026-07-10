@@ -44,7 +44,7 @@ class MASTrackActor(BaseActor):
         total_loss = (self.loss_weight['tracking']['total'] * tracking_loss +
                       self.loss_weight['trajectory']['total'] * trajectory_loss)
 
-        detailed_loss = {}
+        detailed_loss = {"Total_Loss": total_loss.item()}
         detailed_loss.update(tracking_detailed_loss)
         detailed_loss.update(trajectory_detailed_loss)
 

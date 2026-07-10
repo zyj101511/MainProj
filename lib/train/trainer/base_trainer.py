@@ -91,7 +91,6 @@ class BaseTrainer:
                     if self._checkpoint_dir:
                         if self.settings.local_rank in [-1, 0]:
                             self.save_checkpoint()
-
         except Exception as e:
             raise RuntimeError(f'Training crashed at epoch {self.epoch}') from e
 
@@ -211,7 +210,7 @@ class BaseTrainer:
 
         if 'epoch' in fields:
             for loader in self.loaders:
-                if isinstance(loader.sampler, DistributedSampler):
+                if hasattr(loader.sampler, "set_epoch"):
                     loader.sampler.set_epoch(self.epoch)
         print(f'Checkpoint successfully loaded from {checkpoint_path} at epoch {self.epoch}')
         return True
@@ -245,10 +244,12 @@ class BaseTrainer:
             raise ValueError(f'Network type mismatch: current={net_type},pretrained_checkpoint={checkpoint_dict["net_type"]}')
 
         missing_k, unexpected_k = net.load_state_dict(checkpoint_dict["net"], strict=False)
+        print('\033[92mxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\033[0m')
         print("pretrained_ckpt is loaded.")
         if missing_k:
             print("missing keys: ", missing_k)
+            print('\033[92mxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\033[0m')
         if unexpected_k:
             print("unexpected keys:", unexpected_k)
-
+        print('\033[92mxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\033[0m')
         return True

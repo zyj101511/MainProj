@@ -1,11 +1,11 @@
-from settings.test_environment import EnvSettings_ITP
+from lib.settings.test_environment import EnvSettings_ITP
 
 def local_test_env_settings():
     settings = EnvSettings_ITP()
 
     # Set your local paths here.
 
-    settings.workspace_dir = '/home/yanjiezhang/Downloads/Dissertation/MainProj'
+    settings.workspace_dir = '/'
     settings.save_dir = '/home/yanjiezhang/Downloads/Dissertation/MainProj/output'
     settings.results_path = '/home/yanjiezhang/Downloads/Dissertation/MainProj/output/test/tracking_results'    # Where to store tracking results
     settings.segmentation_path = '/home/yanjiezhang/Downloads/Dissertation/MainProj/output/test/segmentation_results'

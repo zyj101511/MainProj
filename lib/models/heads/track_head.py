@@ -143,6 +143,11 @@ class CenterPredictor(nn.Module):
         # (B, 1)
         return ctr_x, ctr_y, offset_x, offset_y, size_w, size_h, idx
 
+    def reset_neurons(self):
+        for m in self.modules():
+            if isinstance(m, MILIF):
+                m.reset()
+
 def build_track_head(cfg, feat_dim):
 
     stride = cfg.MODEL.BACKBONE.STRIDE

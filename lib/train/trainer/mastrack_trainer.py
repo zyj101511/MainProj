@@ -66,12 +66,35 @@ class MASTrainer(BaseTrainer):
 
             self.data_to_gpu_time = time.time()
 
-            # forward pass
-            if not self.use_amp:
-                loss, stats = self.actor(data)
-            else:
-                with torch.amp.autocast(self.device.type):
-                    loss, stats = self.actor(data)
+            search = data['search']  # (L, T, B, C, H, W)
+            template = data['template']  # (L, T, B, C, H, W)
+            search_anno = data['search_anno'] # (B, 1+P*df, 4)
+
+            total_loss = 0
+            merged_stats = {}
+
+            L = search.shape[0]
+
+            for l in range(L):
+                cur_data = {
+                    'search': search[l],  # (T, B, C, H, W)
+                    'template': template[0],
+                    'search_anno': search_anno[:, l:l+1+self.settings.p*self.settings.distance_factor, :],  # 这个要按你actor期望再对齐
+                }
+
+                # forward pass
+                if not self.use_amp:
+                    loss, stats = self.actor(cur_data)
+                else:
+                    with torch.amp.autocast(self.device.type):
+                        loss, stats = self.actor(cur_data)
+
+                total_loss = total_loss + loss
+                for k, v in stats.items():
+                    merged_stats[k] = merged_stats.get(k, 0.0) + v
+
+            loss = total_loss / L
+            stats = {k: v / L for k, v in merged_stats.items()}
 
             # backward pass and weight update
             if loader.training:
@@ -88,6 +111,12 @@ class MASTrainer(BaseTrainer):
                         torch.nn.utils.clip_grad_norm_(self.actor.net.parameters(), self.settings.grad_clip_norm)
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
+
+            # reset neuron states after each forward pass
+            if hasattr(self.actor.net, "reset_neurons"):
+                self.actor.net.reset_neurons()
+            else:
+                raise NotImplementedError("The network should implement a reset_neurons method to reset the neuron states after each forward pass.")
 
             # update statistics
             batch_size = data['template'].shape[loader.batch_dim]
@@ -112,7 +141,7 @@ class MASTrainer(BaseTrainer):
         """Do one epoch for each loader."""
         for loader in self.loaders:
             if self.epoch % loader.epoch_interval == 0:  # 自设属性
-                if isinstance(loader.sampler, DistributedSampler):
+                if hasattr(loader.sampler, "set_epoch"):
                     loader.sampler.set_epoch(self.epoch)
                 self.cycle_dataset(loader)
 

@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class _Dataset:
-    DATASETS_NAME: list[str]
+    DATASETS_NAME: list[str]  # 多个数据集的名字
     DATASETS_RATIO: list[int]  # 多个数据集的采样比例
     SAMPLES_PER_EPOCH: int  # 每个epoch采样多少样本
     def __post_init__(self):
@@ -24,8 +24,8 @@ class _DataCrop:
 class _DATA:
     # TRAIN
     TRAIN: _Dataset = field(default_factory=lambda: _Dataset(
-        DATASETS_NAME=["FE108", "VisEvent"],
-        DATASETS_RATIO=[1, 1],
+        DATASETS_NAME=["FE108"],
+        DATASETS_RATIO=[1],
         SAMPLES_PER_EPOCH=60000
     ))
     # VAL
@@ -106,6 +106,11 @@ class _LOSS:
     FOCAL_WEIGHT: float = 1.0
     GIOU_WEIGHT: float = 2.0
     L1_WEIGHT: float = 5.0
+    DECAY_FACTOR: float = 0.1
+    NEAR_FUTURE_WEIGHT: float = 0.5
+    DISTANT_FUTURE_WEIGHT: float = 0.5
+    TRACK_WEIGHT: float = 1.0
+    TRAJECTORY_WEIGHT: float = 1.0
 
 @dataclass
 class _TRAIN:
@@ -119,6 +124,10 @@ class _TRAIN:
     VAL_EPOCH_INTERVAL: int | None = None  # 多少个epoch跑一次验证集, None不开启VAL
     GRAD_CLIP_NORM: float = 0.1  # 梯度范数太大时梯度裁剪的阈值
     AMP: bool = False  # 是否启用混合精度
+    PRETRAINED_FILE_NAME: str | None = None  # 预训练模型文件名, 如果为None, 则不加载预训练模型
+    SAVE_EVERY_N_EPOCH: int = 10  # 每多少个epoch保存一次模型
+    SAVE_LAST_N_CKPT: int = 10  # 保存最近多少个ckpt, 其他的会被删除, 如果为None, 则不删除
+    SAVE_CKPT_LIST: list[str] = field(default_factory=list)  # 指定保存的ckpt文件名, 如果为空, 则保存所有ckpt
 
 @dataclass
 class _TEST:

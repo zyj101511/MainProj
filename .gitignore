@@ -12,4 +12,7 @@ logs/
 .Ds_Store/
 drafts/
 pretrained_models/
+exp_records/
+tensorboard/
+
 

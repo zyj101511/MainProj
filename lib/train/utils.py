@@ -19,7 +19,8 @@ def update_settings(settings, cfg):
 
 
 def names2datasets(name: str, settings):
-    assert name in ["FE108", "VISEVENT", 'FELT']
+    if name not in ["FE108", "VISEVENT", 'FELT']:
+        raise ValueError(f"Dataset {name} is not supported. Supported datasets are: FE108, VISEVENT, FELT.")
     print("start creating dataset")
     if name == "FE108":
         dataset = FE108Dataset(settings.env.fe108_dir,

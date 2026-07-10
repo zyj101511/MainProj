@@ -25,7 +25,8 @@ class MASTrack(nn.Module):
         # 无论单步还是多步, backbone输入都是5D(T, B, C, H, W), 输出是4D(T, B, C, N) N=template tokens + search tokens
         features = self.backbone(search=search, template=template)
         fused_feature = self._forward_multi_timescale_module(feature=features)
-        out_dict = self._forward_head(fused_feature=fused_feature)
+        fused_feature_trajectory = self._forward_multi_timescale_module(feature=features.detach())
+        out_dict = self._forward_head(fused_feature=fused_feature, fused_feature_trajectory=fused_feature_trajectory)
         # 记录backbone和multi_timescale_module的输出特征
         out_dict['backbone_feature'] = features
         out_dict['fused_feature'] = fused_feature
@@ -45,11 +46,11 @@ class MASTrack(nn.Module):
         fused_feature = self.multi_timescale_module(search_feature)  # (B, C, H, W)
         return fused_feature
 
-    def _forward_head(self, fused_feature: torch.Tensor):
+    def _forward_head(self, fused_feature: torch.Tensor, fused_feature_trajectory: torch.Tensor):
         if self.head_type == 'CENTER':
             # (B, 4), (B, 2, H, W), (B, 2, H, W), (B, 1, H, W)
             pred_box, score_map_ctr, offset_map, size_map, idx = self.track_head(feature=fused_feature)
-            near_future_ctr, cur_v, cur_a, a_deltas = self.trajectory_head(feature=fused_feature, track_idx=idx)
+            near_future_ctr, cur_v, cur_a, a_deltas = self.trajectory_head(feature=fused_feature_trajectory, track_idx=idx)
             out_dict = {'pred_boxes': pred_box, # (B, 4)
                         'score_map': score_map_ctr, # (B, 1, H, W)
                         'offset_map': offset_map, # (B, 2, H, W)

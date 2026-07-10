@@ -181,6 +181,11 @@ class TrajectoryPredictor(nn.Module):
         a_deltas = map_a_delta.gather(dim=3, index=idx_expanded).squeeze(-1)  # (B, df-1, 2)
         return near_future_ctr, cur_v, cur_a, a_deltas
 
+    def reset_neurons(self):
+        for m in self.modules():
+            if isinstance(m, MILIF):
+                m.reset()
+
 def build_trajectory_head(cfg, feat_dim):
 
     stride = cfg.MODEL.BACKBONE.STRIDE

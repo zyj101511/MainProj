@@ -18,7 +18,7 @@ MILIF_layer = partial(MILIF,
                       store_v_seq=False,
                       reset_mode='soft')
 
-class build_multi_timescale_module(nn.Module):
+class Multi_Timescale_Module(nn.Module):
     def __init__(self, t: int, in_channels=3, num_branch=4, num_layer=1, neuron_factory=MILIF_layer):
         super().__init__()
 
@@ -44,6 +44,11 @@ class build_multi_timescale_module(nn.Module):
         branches_out_list = self.multi_timescale_memory_block(x)  # list of (1, B, C, H, W)
         fused_out = self.cross_timescale_fuse_block(branches_out_list)  # (1, B, C, H, W)
         return fused_out.squeeze(0)  # (B, C, H, W)
+
+    def reset_neurons(self):
+        for m in self.modules():
+            if isinstance(m, MILIF):
+                m.reset()
 
 if __name__ == '__main__':
     import torch
