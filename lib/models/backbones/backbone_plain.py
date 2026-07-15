@@ -124,6 +124,14 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
                 for _ in range(2)
             ]
         )
+        self.conv3d = nn.Conv3d(
+            in_channels=embed_dim[3],
+            out_channels=embed_dim[3],
+            kernel_size=(t, 1, 1),
+            stride=1,
+            padding=0,
+            bias=False
+        )
 
         self.apply(self._init_weights)
 
@@ -246,12 +254,15 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
         T, B, C, HW = canvas.shape
         canvas = canvas.reshape(T, B, C, math.isqrt(HW), math.isqrt(HW)) # [T, B, 256, 18, 18]
 
-        y = self.forward_features_transformer(canvas)  # [T, B, 320, 18, 18]
+        x = self.forward_features_transformer(canvas)  # [T, B, 320, 18, 18]
+        x = x.permute(1, 2, 0, 3, 4)  # (B, C, T, H, W)
+        x = self.conv3d(x)  # Conv3d
+        x = x.squeeze(2)  # (B, C, H, W)
 
-        y = y.flatten(3)
+        y = x.flatten(2)
         y = y[..., :320]
 
-        return y  # [T, B, 320, 320](T,B,C,N)
+        return y  # [B, C, 320](B,C,N)
 
     def reset_neurons(self):
         for m in self.modules():

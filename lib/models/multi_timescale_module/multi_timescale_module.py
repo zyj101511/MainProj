@@ -43,7 +43,7 @@ class Multi_Timescale_Module(nn.Module):
     def forward(self, x):  # (T, B, C, H, W)
         branches_out_list = self.multi_timescale_memory_block(x)  # list of (1, B, C, H, W)
         fused_out = self.cross_timescale_fuse_block(branches_out_list)  # (1, B, C, H, W)
-        return fused_out.squeeze(0)  # (B, C, H, W)
+        return fused_out.squeeze(0), branches_out_list  # (B, C, H, W), list of (1, B, C, H, W)
 
     def reset_neurons(self):
         for m in self.modules():

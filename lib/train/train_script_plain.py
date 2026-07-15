@@ -1,8 +1,8 @@
 import os
 from torch import nn
-from lib.models.mastrack import build_model
+from lib.models.mastrack_plain import build_model
 from lib.train.trainer.mastrack_trainer import MASTrainer
-from lib.train.actor.mastrack_actor import MASTrackActor
+from lib.train.actor.mastrack_actor_plain import MASTrackActor
 from lib.utils.box_ops import giou_loss
 from torch.nn.functional import l1_loss
 from lib.utils.focal_loss import FocalLoss
@@ -94,7 +94,7 @@ def run(settings):
     print(f'\033[93mlr scheduler state:\033[0m:')
     print("\t\033[93mscheduler type:\033[0m", type(lr_scheduler).__name__)
     print("\t\033[93mcurrent lr:\033[0m", lr_scheduler.get_last_lr())
-    print("\t\033[93mstate_dict:\033[0m", lr_scheduler.state_dict(), '\n')
+    print("\t\033[93mstate_dict:\033[0m", lr_scheduler.state_dict())
 
     use_amp = getattr(cfg.TRAIN, "AMP", False)
     trainer = MASTrainer(actor=actor,

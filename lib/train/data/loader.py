@@ -8,10 +8,9 @@ from torch.utils.data._utils.collate import default_collate
 
 def mas_collate(batch):
     batch = default_collate(batch)
-    batch['search'] = batch['search'].permute(1, 2, 0, 3, 4, 5).contiguous()  # (L, T, B, H, W, C)
-    batch['template'] = batch['template'].permute(1, 2, 0, 3, 4, 5).contiguous()  # (L, T, B, H, W, C)
+    batch['search'] = batch['search'].permute(1, 2, 0, 3, 4, 5).contiguous()
+    batch['template'] = batch['template'].permute(1, 2, 0, 3, 4, 5).contiguous()  # (L, T, B, C, H, W)
     return batch
-
 
 class MASLoader(torch.utils.data.dataloader.DataLoader):
     def __init__(self, name, dataset, training=True,batch_size=None, shuffle=False, sampler=None,

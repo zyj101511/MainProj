@@ -111,7 +111,10 @@ def _count_parameters(model):
     total_params = sum(p.numel() for p in model.parameters())
     return total_params
 
-def build_model(cfg, training=True, from_pretrained=False):
+
+def build_model(cfg, training=True, load_ckpt=False):
+
+    print(f'\033[93mstart building model:\033[0m MASTrack {cfg.MODEL.BACKBONE.TYPE} \033[93m>>>\033[0m')
     current_dir = Path(__file__).resolve().parent  # ./models
     pretrained_path = current_dir.parents[1] / 'pretrained_models'
     # print(str(current_dir))
@@ -125,25 +128,25 @@ def build_model(cfg, training=True, from_pretrained=False):
         trajectory_head=trajectory_head,
         head_type=cfg.MODEL.HEAD.TYPE,
     )
-    model.train(training)
 
     # 加载checkpoint
-    if from_pretrained:
-        if not cfg.MODEL.PRETRAINED_FILE:
-            raise RuntimeError('PRETRAINED_FILE must be set in the configuration file when training=True')
+    if load_ckpt:
+        if not cfg.TEST.PRETRAINED_FILE_NAME:
+            raise RuntimeError('PRETRAINED_FILE_NAME must be set in the configuration file when load_ckpt is True.')
 
-        pretrained = pretrained_path / cfg.MODEL.PRETRAINED_FILE
+        pretrained = pretrained_path / cfg.TEST.PRETRAINED_FILE_NAME
         if not pretrained.is_file():
             raise RuntimeError(f'Pretrained file not found: {pretrained}')
-        ckpt = torch.load(pretrained, map_location='cpu')
-        missing_keys, unexpected_keys = model.load_state_dict(ckpt["model"], strict=False)
-        print('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
-        print('missing keys in checkpoint:')
-        print(missing_keys)
-        print('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
-        print('unexpected keys in checkpoint:')
-        print(unexpected_keys)
-        print('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
+        ckpt = torch.load(pretrained, map_location='cpu', weights_only=False)
+        if "model" in ckpt:
+            model.load_state_dict(ckpt["model"], strict=True)
+        elif "net" in ckpt:
+            model.load_state_dict(ckpt["net"], strict=True)
+        else:
+            raise RuntimeError(f'Checkpoint does not contain "model" or "net" keys:{pretrained}')
+
+
+    model.train(training)
 
     # 输出模型的总参数量
     # when t = 1, branch=4, layer=1 without gate
@@ -161,14 +164,18 @@ def build_model(cfg, training=True, from_pretrained=False):
     # 19,701,659 with learnable decay in backbone and multi_timescale_module, learnable pad
     # 19,701,671 with learnable decay in all modules, learnable pad
 
-    print()
-    print(f"Total number of parameters: {_count_parameters(model):,}")
+    total_params, backbone_params, multi_timescale_params, track_head_params, trajectory_head_params = _count_parameters(model)
+    print(f"\033[92mTotal number of parameters:\033[0m {total_params:,}")
+    print(f"\033[92mBackbone parameters:\033[0m {backbone_params:,}")
+    print(f"\033[92mMulti-timescale module parameters:\033[0m {multi_timescale_params:,}")
+    print(f"\033[92mTrack head parameters:\033[0m {track_head_params:,}")
+    print(f"\033[92mTrajectory head parameters:\033[0m {trajectory_head_params:,}\n")
 
     return model
 
 if __name__ == '__main__':
     from lib.config.loader import load_from_yaml
-    cfg = load_from_yaml('/home/yanjiezhang/Downloads/Dissertation/MainProj/experiments/fe108_mastrack.yaml')
+    cfg = load_from_yaml('/experiments/01_fe108_mastrack.yaml')
     net = build_model(cfg, training=False)
     net.to('cuda')
 

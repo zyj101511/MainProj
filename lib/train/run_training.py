@@ -9,7 +9,8 @@ warnings.filterwarnings("ignore", category=UserWarning)
 import random
 import numpy as np
 from lib.settings.settings import Settings
-from lib.train.train_script import run
+import importlib
+
 torch.backends.cudnn.benchmark = False
 
 def init_seeds(seed):
@@ -24,13 +25,13 @@ def run_training(script_name, config_name, cudnn_benchmark=True, local_rank=-1,
                  save_dir=None, base_seed=None):
 
     if save_dir is None:
-        print("save_dir dir is not given. Use the default dir instead.")
+        print(f'\033[91msave_dir dir is not given. Use the default dir instead.\033[0m')
 
     cv.setNumThreads(0)
 
     torch.backends.cudnn.benchmark = cudnn_benchmark
 
-    print('script_name: {}.py  config_name: {}.yaml'.format(script_name, config_name))
+    print(f'\033[93mscript_name:\033[0m {script_name}.py  \033[93mconfig_name:\033[0m {config_name}.yaml\n')
 
     if base_seed is not None:
         if local_rank != -1:
@@ -46,7 +47,10 @@ def run_training(script_name, config_name, cudnn_benchmark=True, local_rank=-1,
 
     prj_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
     settings.cfg_file = os.path.join(prj_dir, f'experiments/{config_name}.yaml')
-    run(settings)
+
+    module = importlib.import_module(f"lib.train.{script_name}")
+
+    module.run(settings)
 
 def main():
     parser = argparse.ArgumentParser(description='Run training script.')

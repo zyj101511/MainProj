@@ -170,13 +170,14 @@ if __name__ == '__main__':
     # permuted_anno = batch['search_anno'].permute(1, 0, 2)  # (L, B, 4)
     permuted_batch = batch['search']
     permuted_anno = batch['search_anno']
-
+    import numpy as np
     L, T, B,  = permuted_batch.shape[:3]
     for l in range(L):
         for t in range(T):
             for b in range(B):
                 import cv2
                 img = permuted_batch[l, t, b].contiguous().numpy()
+                print(np.max(img), np.min(img))
                 from lib.utils.box_ops import box_xywh_to_xyxy
                 anno = box_xywh_to_xyxy(permuted_anno[l, b])
 

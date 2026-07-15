@@ -100,12 +100,32 @@ def giou_loss(boxes1, boxes2):
 
 
 def clip_box(box: list, H, W, margin=0):
+    """input box: (x1, y1, w, h), output box: (x1, y1, w, h)"""
     x1, y1, w, h = box
     x2, y2 = x1 + w, y1 + h
-    x1 = min(max(0, x1), W-margin)
-    x2 = min(max(margin, x2), W)
-    y1 = min(max(0, y1), H-margin)
-    y2 = min(max(margin, y2), H)
-    w = max(margin, x2-x1)
-    h = max(margin, y2-y1)
-    return [x1, y1, w, h]
+    x1 = min(max(0, x1), W-margin)  # 左上x不能小于0, 不能大于W-margin
+    x2 = min(max(margin, x2), W)  # 右下x不能小于margin(太靠左), 不能大于W
+    y1 = min(max(0, y1), H-margin)  # 左上y不能小于0, 不能大于H-margin
+    y2 = min(max(margin, y2), H)  # 右下y不能小于margin(太靠上), 不能大于H
+    w = max(margin, x2-x1)  # 宽度不能小于margin
+    h = max(margin, y2-y1)  # 高度不能小于margin
+    return (x1, y1, w, h)
+
+def clip_box_tensor(box, H, W, margin=0):
+    # box: (4) (cx, cy, w, h)
+    cx, cy, w, h = box.unbind(-1)
+
+    x1 = cx - 0.5 * w
+    y1 = cy - 0.5 * h
+    x2 = cx + 0.5 * w
+    y2 = cy + 0.5 * h
+
+    x1 = torch.clamp(x1, min=0, max=W - margin)  # 左上x不能小于0, 不能大于W-margin
+    x2 = torch.clamp(x2, min=margin, max=W)  # 右下x不能小于margin(太靠左), 不能大于W
+    y1 = torch.clamp(y1, min=0, max=H - margin) # 左上y不能小于0, 不能大于H-margin
+    y2 = torch.clamp(y2, min=margin, max=H) # 右下y不能小于margin(太靠上), 不能大于H
+
+    w = torch.clamp(x2 - x1, min=margin) # 宽度不能小于margin
+    h = torch.clamp(y2 - y1, min=margin) # 高度不能小于margin
+    return torch.stack([x1, y1, w, h], dim=-1)
+

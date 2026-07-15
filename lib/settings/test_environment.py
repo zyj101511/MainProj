@@ -3,15 +3,14 @@ import os
 
 
 class EnvSettings_ITP:
-    def __init__(self, workspace_dir, data_dir, save_dir):
+    def __init__(self, workspace_dir='', data_dir='', save_dir=''):
         self.workspace_dir = workspace_dir
         self.save_dir = save_dir
-        self.results_path = os.path.join(save_dir, 'test/tracking_results')
-        self.segmentation_path = os.path.join(save_dir, 'test/segmentation_results')
-        self.network_path = os.path.join(save_dir, 'test/networks')
-        self.result_plot_path = os.path.join(save_dir, 'test/result_plots')
-        self.fe108_dir = os.path.join(save_dir, 'FE108/test')
-        self.visevent_dir = os.path.join(save_dir, 'VisEvent/test')
+        self.results_txt_path = os.path.join(save_dir, 'txt_results')
+        self.result_plot_path = os.path.join(save_dir, 'plot_results')
+        self.checkpoint_path = ''
+        self.fe108_dir = os.path.join(data_dir, 'FE108_GTP_lmdb')
+        self.visevent_dir = os.path.join(data_dir, 'VisEvent/test')
 
 
 def create_default_local_file_ITP_test(workspace_dir, data_dir, save_dir):
@@ -40,15 +39,16 @@ def create_default_local_file_ITP_test(workspace_dir, data_dir, save_dir):
         f.write('\n    return settings\n\n')
 
 
-def env_settings(workpace_dir, data_dir, save_dir):
-    env_module_name = 'settings.local_test'
+def env_settings():
+    env_module_name = 'lib.settings.local_test'
     try:
         env_module = importlib.import_module(env_module_name)
-        return env_module.local_env_settings()
+        return env_module.local_test_env_settings()
     except:
         env_file = os.path.join(os.path.dirname(__file__), 'local_test.py')
-
-        # Create a default file
-        create_default_local_file_ITP_test(workpace_dir, data_dir, save_dir)
         raise RuntimeError('YOU HAVE NOT SETUP YOUR local.py!!!\n Go to "{}" and set all the paths you need. '
                            'Then try to run again.'.format(env_file))
+if __name__ == '__main__':
+    create_default_local_file_ITP_test('/home/yanjiezhang/Downloads/Dissertation/MainProj',
+                                   '/home/yanjiezhang/Downloads/Dissertation/dataset',
+                                   '/home/yanjiezhang/Downloads/Dissertation/MainProj/tracking_results')

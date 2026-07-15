@@ -26,13 +26,13 @@ class _DATA:
     TRAIN: _Dataset = field(default_factory=lambda: _Dataset(
         DATASETS_NAME=["FE108"],
         DATASETS_RATIO=[1],
-        SAMPLES_PER_EPOCH=60000
+        SAMPLES_PER_EPOCH=60000,
     ))
     # VAL
     VAL: _Dataset = field(default_factory=lambda: _Dataset(
         DATASETS_NAME=["FE108"],
         DATASETS_RATIO=[1],
-        SAMPLES_PER_EPOCH=5000
+        SAMPLES_PER_EPOCH=1
     ))
     # SEARCH
     SEARCH: _DataCrop = field(default_factory=lambda: _DataCrop(
@@ -66,10 +66,10 @@ class _Multi_Timescale_Memory:
 
 @dataclass
 class _MODEL:
-    NEURON: str = 'LIF'
+    NEURON: str = 'MLIF'
     T: int = 1 # 神经元的输入步数
     BACKBONE: _Backbone = field(default_factory=lambda: _Backbone(
-        TYPE = 'BASE',
+        TYPE = 'LARGE',
         STRIDE = 16
     ))
     MULTI_TIMESCALE_MODULE: _Multi_Timescale_Memory = field(default_factory=lambda: _Multi_Timescale_Memory(
@@ -79,7 +79,7 @@ class _MODEL:
     HEAD: _Head = field(default_factory=lambda: _Head(
         TYPE = 'CENTER',
         NUM_CHANNELS = 256,
-        P = 5,
+        P = 4,
         DISTANCE_FACTOR = 4
     ))
     def __post_init__(self):
@@ -90,7 +90,7 @@ class _MODEL:
 class _SCHEDULER:
     TYPE: str = 'step'
     DECAY_RATE: float = 0.1
-    LR_DROP_EPOCH: int = 100
+    LR_DROP_EPOCH: int = 200
 
 @dataclass
 class _OPTIMIZER:
@@ -99,24 +99,24 @@ class _OPTIMIZER:
     # 学习率调整策略,step就是多少个epoch调整,
     SCHEDULER: _SCHEDULER = field(default_factory=_SCHEDULER)
     WEIGHT_DECAY: float = 0.0001
-    BACKBONE_MULTIPLIER: float = 0.1  # backbone一般是预训练好的,用更小的学习率,其他新加层用LR
+    BACKBONE_MULTIPLIER: float = 1  # backbone一般是预训练好的,用更小的学习率,其他新加层用LR
 
 @dataclass
 class _LOSS:
     FOCAL_WEIGHT: float = 1.0
     GIOU_WEIGHT: float = 2.0
-    L1_WEIGHT: float = 5.0
-    DECAY_FACTOR: float = 0.1
-    NEAR_FUTURE_WEIGHT: float = 0.5
-    DISTANT_FUTURE_WEIGHT: float = 0.5
+    L1_WEIGHT: float = 4.0
+    DECAY_FACTOR: float = 0.9
+    NEAR_FUTURE_WEIGHT: float = 10
+    DISTANT_FUTURE_WEIGHT: float = 0.05
     TRACK_WEIGHT: float = 1.0
-    TRAJECTORY_WEIGHT: float = 1.0
+    TRAJECTORY_WEIGHT: float = 3.0
 
 @dataclass
 class _TRAIN:
-    EPOCH: int = 100
-    BATCH_SIZE: int = 8
-    L: list = field(default_factory=lambda: [1, 5, 10, 15])  # 训练时, 采样序列的长度, 训练时会随机选择一个长度
+    EPOCH: int = 500
+    BATCH_SIZE: int = 2
+    L: list = field(default_factory=lambda: [1, 2, 4])  # 训练时, 采样序列的长度, 训练时会随机选择一个长度
     NUM_WORKERS: int = 0  # Dataloader用多少个子进程
     OPTIMIZER: _OPTIMIZER = field(default_factory=_OPTIMIZER)
     LOSS: _LOSS = field(default_factory=_LOSS)
@@ -124,15 +124,23 @@ class _TRAIN:
     VAL_EPOCH_INTERVAL: int | None = None  # 多少个epoch跑一次验证集, None不开启VAL
     GRAD_CLIP_NORM: float = 0.1  # 梯度范数太大时梯度裁剪的阈值
     AMP: bool = False  # 是否启用混合精度
-    PRETRAINED_FILE_NAME: str | None = None  # 预训练模型文件名, 如果为None, 则不加载预训练模型
-    SAVE_EVERY_N_EPOCH: int = 10  # 每多少个epoch保存一次模型
-    SAVE_LAST_N_CKPT: int = 10  # 保存最近多少个ckpt, 其他的会被删除, 如果为None, 则不删除
+    FROM_PRETRAINED: bool = False  # 是否从预训练模型开始训练, 如果为False, 则从头开始训练
+    LOAD_LATEST_CKPT: bool = False  # 是否加载最近的ckpt继续训练, 如果为False, 则从头开始训练
+    PRETRAINED_FILE_NAME: str | None = None  # 指定预训练模型的文件名
+    SAVE_EVERY_N_EPOCH: int = 5  # 每多少个epoch保存一次模型
+    SAVE_LAST_N_CKPT: int = 5  # 保存最近多少个ckpt, 其他的会被删除, 如果为None, 则不删除
     SAVE_CKPT_LIST: list[str] = field(default_factory=list)  # 指定保存的ckpt文件名, 如果为空, 则保存所有ckpt
+    SAMPLE_LAST_TEMPLATE: float = 0.5  # 训练时, 采样模板帧的策略, 0.5表示50%的概率采样上一帧, 50%的概率采样之前的任意一帧
 
 @dataclass
 class _TEST:
-    CHECKPOINT_EPOCH: int = 100
-    CHECKPOINT_PATH: str | None = None
+    DEBUG: int = 0
+    SAVE_PLOT: bool = False
+    PRETRAINED_FILE_NAME: str | None = None
+    SEARCH_SCALE_FACTOR: float = 5
+    TEMPLATE_SCALE_FACTOR: float = 1.2
+    CLIP_BOX_MARGIN: int = 10
+    SEARCH_BOX_UPDATE_MARGIN_RATIO: float = 0.1
 
 @dataclass
 class Config:

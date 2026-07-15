@@ -1,16 +1,18 @@
 import cv2
 import numpy as np
-from lib.train.data.utils.base_video_dataset import BaseSeqDataset
-from lib.train.data.utils.preprocessing import Preprocessor
+import torch
+
+from lib.test.data.utils.base_video_dataset import BaseSeqDataset
+
 
 
 class FE108Dataset(BaseSeqDataset):
     """ Base class for video datasets """
 
-    def __init__(self, root, split: str, search_out_sz=256, template_out_sz=128, scale_factor=1.5, scale_jitter_factor=0.1):
+    def __init__(self, root, split: str, T=1):
         super().__init__(root, split)
         self.meta = self.json_loader(self.lmdb, f"{split}/meta.json")['videos']
-        self.preprocessor = Preprocessor(search_out_sz, template_out_sz, scale_factor, scale_jitter_factor)
+        self.T = T
 
     def __len__(self):
         """
@@ -19,29 +21,17 @@ class FE108Dataset(BaseSeqDataset):
         """
         return self._get_num_seqs()
 
-    def __getitem__(self, items: tuple):
-        """
-        Returns an entire sequence and ground truth or a clip of one sequence and ground truth
-        items: (seq_id, frame_start_id, L, P, distance_factor, T)
-                L is the length of the clip, P is the step of predictions
-        """
-        seq_id, frame_start_id, l, p, df, T = items
-        if l < 1 or p*df < l:
-            raise ValueError(f'clip length must be >= 1, and (prediction length * distance factor) must be >= clip length, but got {l} and {p*df}')
-        if df < 1:
-            raise ValueError(f"distance_factor should be >= 1, but got {df}")
-        if frame_start_id + l + p > self._get_num_frames(seq_id) or frame_start_id + l + df * p > self._get_num_frames(seq_id):
-            raise ValueError(f"(start+l+p) and (start+l+distance_factor*p) should be <= number of frames in the sequence, "
-                             f"but got {frame_start_id + l + p}, {frame_start_id + l + df * p} and number of frames={self._get_num_frames(seq_id)}")
-        search_array = self._get_frames(seq_id, list(range(frame_start_id, frame_start_id + l)), T=T)  # (L, T, 3, 260, 346)
-        search_anno_array = self._get_annos(seq_id, list(range(frame_start_id, frame_start_id + (l+df*p))))
-        if frame_start_id > 0:
-            template_array = self._get_frames(seq_id, [frame_start_id-1], T=T)  # (1, T, 3, 260, 346)
-            template_anno_array = self._get_annos(seq_id, [frame_start_id-1])
-        else:
-            template_array = self._get_frames(seq_id, [0], T=T)
-            template_anno_array = self._get_annos(seq_id, [0])
-        return self.preprocessor(search_array, search_anno_array, template_array, template_anno_array)
+    def __getitem__(self, seq_id):
+        seq_len = self._get_num_frames(seq_id)
+
+        search_array = self._get_frames(seq_id, list(range(seq_len)), T=self.T)
+        search_anno_array = self._get_annos(seq_id, list(range(seq_len)))
+
+        data = {
+            'search': torch.from_numpy(search_array).float()/255.0,
+            'search_anno': torch.from_numpy(search_anno_array).float()
+        }
+        return data
 
     def _get_seq_name(self, seq_id):
         """ Name of the sequence
@@ -95,13 +85,13 @@ class FE108Dataset(BaseSeqDataset):
 
     def _get_annos(self, seq_id, frame_ids):
         gt = self.txt_loader(self.lmdb, f"{self.split}/{self._get_seq_name(seq_id)}/gt.txt")
-        # (L+P*df, 4)
+        # (L, 4)
         return gt[frame_ids]
 
 if __name__ == '__main__':
     dataset = FE108Dataset(root='/home/yanjiezhang/Downloads/Dissertation/dataset/FE108_nbinsGTP_lmdb',
-                           split='train', search_out_sz=256, template_out_sz=128, scale_factor=1.3, scale_jitter_factor=0.1)
-    seq_id = 0
+                           split='test', T=1)
+    seq_id = 1
     frame_ids = [0, 1, 2]
     print(len(dataset))
     print(dataset._get_seq_name(seq_id))
@@ -119,21 +109,25 @@ if __name__ == '__main__':
         cv2.imshow('img', img)
         cv2.waitKey(0)
     cv2.destroyAllWindows()
-    item = (seq_id, 0, 5, 4, 4, 1)
+    item = 1
     data = dataset[item]
     print(data.keys())
-    print(len(data['template']))
     print(len(data['search_anno']))
     print(data['search'][0][0].shape)
-    print(data['template'][0][0].shape)
 
-    for l, img in enumerate(data['search'].transpose(1, 0, 2, 3, 4)[0]):
-        img = img.transpose(1, 2, 0) # (C, H, W) -> (H, W, C)
+    L, T, C, H, W = data['search'].shape
+    for l, img in enumerate(data['search'].reshape(L * T, C, H, W)):
+        img = (img.permute(1, 2, 0).cpu().numpy() * 255).clip(0, 255).astype(np.uint8)
         img = np.ascontiguousarray(img)
-        gt = data['search_anno'][l]
+
+        gt = data['search_anno'][l].cpu().numpy()
         cv2.rectangle(img, (int(gt[0]), int(gt[1])),
-                      (int(gt[0])+int(gt[2]), int(gt[1])+int(gt[3])), (0, 255, 0), 1)
-        for gt in data['search_anno'][l+1:l+5]:
-            cv2.circle(img, (int(gt[0]+gt[2]/2), int(gt[1]+gt[3]/2)), 1, (255, 255, 255), -1)
+                      (int(gt[0]) + int(gt[2]), int(gt[1]) + int(gt[3])), (0, 255, 0), 1)
+
+        for gt_next in data['search_anno'][l + 1:l + 5]:
+            gt_next = gt_next.cpu().numpy()
+            cv2.circle(img, (int(gt_next[0] + gt_next[2] / 2), int(gt_next[1] + gt_next[3] / 2)),
+                       1, (255, 255, 255), -1)
+
         cv2.imshow('img', img)
-        cv2.waitKey(0)
+        cv2.waitKey(100)

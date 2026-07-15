@@ -45,12 +45,12 @@ class BaseTrainer:
                 self._checkpoint_dir = os.path.join(self.settings.env.workspace_dir, 'checkpoints')
             else:
                 self._checkpoint_dir = os.path.join(self.settings.save_dir, 'checkpoints')
-            print("checkpoints will be saved to %s" % self._checkpoint_dir)
+            print(f"\033[93mcheckpoints will be saved to:\033[0m {self._checkpoint_dir}")
 
             if self.settings.local_rank in [-1, 0]:
                 if not os.path.exists(self._checkpoint_dir):
-                    print("checkpoints directory doesn't exist. "
-                          "Create checkpoints directory")
+                    print(f"\033[91mcheckpoints directory doesn't exist. "
+                          f"Create checkpoints directory\033[0m")
                     os.makedirs(self._checkpoint_dir)
         else:
             self._checkpoint_dir = None
@@ -69,7 +69,7 @@ class BaseTrainer:
             if load_latest:  # 断点重训, 恢复optimizer
                 self.load_checkpoint()
             if load_pretrained_ckpt:  # 加载预训练权重
-                self.load_state_dict(self.settings.pretrained_ckpt_path)
+                self.load_state_dict(self.settings.env.pretrained_ckpt_dir)
 
             for epoch in range(self.epoch+1, max_epochs+1):
                 self.epoch = epoch
@@ -119,7 +119,7 @@ class BaseTrainer:
 
         directory = f'{self._checkpoint_dir}'
         if not os.path.exists(directory):
-            print("checkpoint directory doesn't exist when trying to save. creating...")
+            print("\033[91mcheckpoint directory doesn't exist when trying to save. creating...\033[0m")
             os.makedirs(directory)
 
         # First save as a tmp file
@@ -192,7 +192,7 @@ class BaseTrainer:
         for key in fields:
             if key in ignore_fields:
                 continue
-            if key == 'net':
+            if key == 'model':
                 net.load_state_dict(checkpoint_dict[key])
             elif key == 'optimizer':
                 self.optimizer.load_state_dict(checkpoint_dict[key])
@@ -212,7 +212,20 @@ class BaseTrainer:
             for loader in self.loaders:
                 if hasattr(loader.sampler, "set_epoch"):
                     loader.sampler.set_epoch(self.epoch)
-        print(f'Checkpoint successfully loaded from {checkpoint_path} at epoch {self.epoch}')
+        print(f'\033[93mCheckpoint successfully loaded from\033[0m {checkpoint_path} \033[93mat epoch\033[0m {self.epoch}\n')
+        print(f'\033[93moptimizer state:\033[0m:')
+        print("\t\033[93moptimizer type:\033[0m", type(self.optimizer).__name__)
+        for i, group in enumerate(self.optimizer.param_groups):
+            print(f"\tgroup {i}:")
+            for k, v in group.items():
+                if k == "params":
+                    print(f"\t\033[93mparams:\033[0m {len(v)} tensors")
+                else:
+                    print(f"\t\033[93m{k}:\033[0m {v}")
+        print(f'\033[93mlr scheduler state:\033[0m:')
+        print("\t\033[93mscheduler type:\033[0m", type(self.lr_scheduler).__name__)
+        print("\t\033[93mcurrent lr:\033[0m", self.lr_scheduler.get_last_lr())
+        print("\t\033[93mstate_dict:\033[0m", self.lr_scheduler.state_dict(), '\n')
         return True
 
     def load_state_dict(self, pretrained_ckpt=None):
@@ -222,7 +235,6 @@ class BaseTrainer:
         net = self.actor.net.module if multigpu.is_multi_gpu(self.actor.net) else self.actor.net
 
         net_type = type(net).__name__
-
         if isinstance(pretrained_ckpt, str):
             # checkpoint is the path
             if os.path.isdir(pretrained_ckpt):
@@ -234,22 +246,74 @@ class BaseTrainer:
             else:
                 checkpoint_path = os.path.expanduser(pretrained_ckpt)
         else:
-            raise TypeError(f'pretrained_ckpt must be a string, got {type(pretrained_ckpt)}')
+            print(f'\033[91mpretrained_ckpt_path is not provided in settings, loading pretrained weights using cgf.PRETRINED_FILE_NAME.\033[0m')
+
+            if not self.actor.cfg.TRAIN.PRETRAINED_FILE_NAME:
+                raise RuntimeError('PRETRAINED_FILE_NAME must be set when pretrained_ckpt is not provided')
+            current_dir = Path(__file__).resolve().parent  # ./trainer
+            pretrained_path = current_dir.parents[2] / 'pretrained_models'
+            checkpoint_path = pretrained_path / self.actor.cfg.TRAIN.PRETRAINED_FILE_NAME
+            if not checkpoint_path.is_file():
+                raise RuntimeError(f'Pretrained file not found: {checkpoint_path}')
 
         # Load network
-        print("Loading pretrained_ckpt from ", checkpoint_path)
+        print(f"\033[93mLoading pretrained_ckpt from:\033[0m {checkpoint_path}")
         checkpoint_dict = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
         if net_type != checkpoint_dict['net_type']:
             raise ValueError(f'Network type mismatch: current={net_type},pretrained_checkpoint={checkpoint_dict["net_type"]}')
 
-        missing_k, unexpected_k = net.load_state_dict(checkpoint_dict["net"], strict=False)
-        print('\033[92mxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\033[0m')
-        print("pretrained_ckpt is loaded.")
-        if missing_k:
-            print("missing keys: ", missing_k)
-            print('\033[92mxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\033[0m')
-        if unexpected_k:
-            print("unexpected keys:", unexpected_k)
-        print('\033[92mxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\033[0m')
+        if "model" in checkpoint_dict:
+            model_name = 'model'
+        elif "net" in checkpoint_dict:
+            model_name = 'net'
+
+        if hasattr(net, "backbone"):
+            missing_k_1, unexpected_k_1 = net.backbone.load_state_dict(
+                {k.removeprefix("backbone."): v
+                 for k, v in checkpoint_dict[model_name].items()
+                 if k.startswith("backbone.")},
+                strict=False
+            )
+        else:
+            raise RuntimeError(f"\033[91mError: net does not have backbone, cannot load pretrained weights for it.\033[0m")
+
+        if hasattr(net, "multi_timescale_module"):
+            missing_k_2, unexpected_k_2 = net.multi_timescale_module.load_state_dict(
+                {k.removeprefix("multi_timescale_module."): v
+                 for k, v in checkpoint_dict[model_name].items()
+                 if k.startswith("multi_timescale_module.")},
+                strict=False)
+        else:
+            print(f"\033[91mWarning: net does not have multi_timescale_module, skipping loading weights for it.\033[0m")
+            missing_k_2, unexpected_k_2 = [], []
+
+        print('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
+        print(f"\033[93mpretrained_ckpt is loaded from:\033[0m {checkpoint_path}")
+
+        if missing_k_1:
+            print(f"\033[91mbackbone missing keys:\033[0m {missing_k_1}")
+        if unexpected_k_1:
+            print(f"\033[91mbackbone unexpected keys:\033[0m {unexpected_k_1}")
+
+        if missing_k_2:
+            print(f"\033[91mmulti_timescale_module missing keys:\033[0m {missing_k_2}")
+        if unexpected_k_2:
+            print(f"\033[91mmulti_timescale_module unexpected keys:\033[0m{unexpected_k_2}")
+
+        print(f'\n\033[93moptimizer state:\033[0m:')
+        print("\t\033[93moptimizer type:\033[0m", type(self.optimizer).__name__)
+        for i, group in enumerate(self.optimizer.param_groups):
+            print(f"\tgroup {i}:")
+            for k, v in group.items():
+                if k == "params":
+                    print(f"\t\033[93mparams:\033[0m {len(v)} tensors")
+                else:
+                    print(f"\t\033[93m{k}:\033[0m {v}")
+        print(f'\033[93mlr scheduler state:\033[0m:')
+        print("\t\033[93mscheduler type:\033[0m", type(self.lr_scheduler).__name__)
+        print("\t\033[93mcurrent lr:\033[0m", self.lr_scheduler.get_last_lr())
+        print("\t\033[93mstate_dict:\033[0m", self.lr_scheduler.state_dict())
+        print('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n')
+
         return True

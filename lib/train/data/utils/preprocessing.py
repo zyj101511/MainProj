@@ -23,7 +23,10 @@ class Preprocessor():
         min_y = np.min(left_top_y)
         max_x = np.max(right_bottom_x)
         max_y = np.max(right_bottom_y)
-        return self._box_xyxy_to_cxcywh([min_x, min_y, max_x, max_y])
+        cx, cy, w, h = self._box_xyxy_to_cxcywh([min_x, min_y, max_x, max_y])
+
+        side = np.sqrt(w * h)
+        return np.array([cx, cy, side, side], dtype=np.float32)
 
     def _get_jittered_search_box_anno(self, search_anno_array):
         anno = search_anno_array.copy()

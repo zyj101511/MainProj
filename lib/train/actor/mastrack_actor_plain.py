@@ -39,14 +39,11 @@ class MASTrackActor(BaseActor):
 
     def compute_loss(self, net_out_dict, search_anno):
         tracking_loss, tracking_detailed_loss = self._compute_tracking_loss(net_out_dict, search_anno)
-        trajectory_loss, trajectory_detailed_loss = self._compute_trajectory_loss(net_out_dict, search_anno)
 
-        total_loss = (self.loss_weight['tracking']['total'] * tracking_loss +
-                      self.loss_weight['trajectory']['total'] * trajectory_loss)
+        total_loss = (tracking_loss)
 
         detailed_loss = {"Total_Loss": total_loss.item()}
         detailed_loss.update(tracking_detailed_loss)
-        detailed_loss.update(trajectory_detailed_loss)
 
         return total_loss, detailed_loss
 
@@ -104,67 +101,6 @@ class MASTrackActor(BaseActor):
                          "Tracking_Loss/l1": l1_loss.item(),
                          "Tracking_Loss/location": location_loss.item(),
                          "Tracking_IoU": mean_iou.item()}
-        return total_loss, detailed_loss
-
-    def _recursive_compute_distance_pred(self, gt_cur_ctr, pred_cur_v, pred_cur_a, pred_a_deltas):
-
-        pred_distant_future_ctr = []
-
-        c = gt_cur_ctr
-        v = pred_cur_v
-        a = pred_cur_a
-
-        # 1st segment
-        c = c + v*self.cfg.MODEL.HEAD.P + a*self.cfg.MODEL.HEAD.P**2/2  # (B, 2)
-        v = v + a*self.cfg.MODEL.HEAD.P  # (B, 2)
-
-        for i in range(pred_a_deltas.size(1)):
-            a_delta = pred_a_deltas[:, i, :]  # (B, 2)
-            a = a + a_delta
-
-            c = c + v * self.cfg.MODEL.HEAD.P + a * self.cfg.MODEL.HEAD.P ** 2 / 2  # (B, 2)
-            v = v + a * self.cfg.MODEL.HEAD.P  # (B, 2)
-            pred_distant_future_ctr.append(c)
-
-        return torch.stack(pred_distant_future_ctr, dim=1)  # (B, df-1, 2) 最后df-1个拐点
-
-
-
-    def _compute_trajectory_loss(self, net_out_dict, search_anno):
-        pred_near_future_ctr = net_out_dict['near_future_ctr']  # (B, P, 2)
-        gt_near_future_anno = search_anno[:, 1:self.cfg.MODEL.HEAD.P+1, :]  # (B, P, 4)
-        search_size = self.cfg.DATA.SEARCH.SIZE
-        gt_near_future_ctr = box_xywh_to_cxcywh(gt_near_future_anno)[..., :2] / search_size  # (B, P, 2)
-
-        gt_distant_future_anno = search_anno[:, self.cfg.MODEL.HEAD.P+1::self.cfg.MODEL.HEAD.P, :]  # (B, df-1, 4)
-        gt_distant_future_ctr = box_xywh_to_cxcywh(gt_distant_future_anno)[..., :2] / search_size  # (B, df - 1, 2)
-        gt_cur_ctr = box_xywh_to_cxcywh(search_anno[:, 0, :])[..., :2] / search_size  # (B, 2)
-
-        pred_cur_v = net_out_dict['cur_v']  # (B, 2)
-        pred_cur_a = net_out_dict['cur_a']  # (B, 2)
-        pred_a_deltas = net_out_dict['a_deltas']  # (B, df-1, 2)
-        pred_distant_future_ctr = self._recursive_compute_distance_pred(gt_cur_ctr, pred_cur_v, pred_cur_a, pred_a_deltas)
-
-        # compute near future loss
-        near_future_loss = self.objective['trajectory_l1_loss'](pred_near_future_ctr, gt_near_future_ctr).mean()
-
-        # compute distant future loss
-        # 'trajectory_l1_loss'必须是reduction='none'
-        distant_future_loss = self.objective['trajectory_l1_loss'](pred_distant_future_ctr, gt_distant_future_ctr).mean(dim=-1)  # (B, df-1)
-        decay_factor = self.loss_weight['trajectory']['decay_factor']
-        weight = torch.tensor([1 * decay_factor ** i for i in range(distant_future_loss.size(1))],
-                              device=distant_future_loss.device,
-                              dtype=distant_future_loss.dtype).unsqueeze(0)  # (1, df-1)
-        distant_future_loss = (distant_future_loss * weight).sum(dim=1) / weight.sum()
-        distant_future_loss = distant_future_loss.mean()
-
-        # weighted sum loss
-        total_loss = (self.loss_weight['trajectory']['near_future_loss'] * near_future_loss
-                      + self.loss_weight['trajectory']['distant_future_loss'] * distant_future_loss)
-
-        detailed_loss = {"Trajectory_Loss/total": total_loss.item(),
-                         "Trajectory_Loss/near_future_loss": near_future_loss.item(),
-                         "Trajectory_Loss/distant_future_loss": distant_future_loss.item()}
         return total_loss, detailed_loss
 
 

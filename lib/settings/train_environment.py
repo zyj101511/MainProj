@@ -10,8 +10,8 @@ def create_default_local_file_ITP_train(workspace_dir=None, data_dir=None):
     default_settings = OrderedDict({
         'workspace_dir': workspace_dir,
         'tensorboard_dir': os.path.join(workspace_dir, 'tensorboard'),    # Directory for tensorboard files.
-        'pretrained_networks': os.path.join(workspace_dir, 'pretrained_networks'),
-        'fe108_dir': os.path.join(data_dir, 'FE108/train'),
+        'pretrained_ckpt_dir': os.path.join(workspace_dir, 'pretrained_models'),
+        'fe108_dir': os.path.join(data_dir, 'FE108_nbinsGTP_lmdb'),
         'visevent_dir': os.path.join(data_dir, 'VisEvent/train')})
 
     comment = {'workspace_dir': 'Base directory for saving network checkpoints.',
@@ -40,7 +40,4 @@ def env_settings():
         env_module = importlib.import_module(env_module_name)
         return env_module.EnvironmentSettings()
     except:
-        env_file = os.path.join(os.path.dirname(__file__), 'local_train.py')
-
-        create_default_local_file_ITP_train()
         raise RuntimeError('YOU HAVE NOT SETUP YOUR local.py!!!\n Go to "{}" and set all the paths you need. Then try to run again.'.format(env_file))

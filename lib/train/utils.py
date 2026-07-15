@@ -18,23 +18,24 @@ def update_settings(settings, cfg):
     settings.template_output_sz = cfg.DATA.TEMPLATE.SIZE
 
 
-def names2datasets(name: str, settings):
+def names2datasets(name: str, settings, sample_last_template):
     if name not in ["FE108", "VISEVENT", 'FELT']:
         raise ValueError(f"Dataset {name} is not supported. Supported datasets are: FE108, VISEVENT, FELT.")
-    print("start creating dataset")
+    print("\033[93mstart creating dataset >>>\033[0m")
     if name == "FE108":
         dataset = FE108Dataset(settings.env.fe108_dir,
                                search_out_sz=settings.search_output_sz,
                                template_out_sz=settings.template_output_sz,
                                scale_factor=settings.search_scale_factor,
                                scale_jitter_factor=settings.search_scale_jitter_factor,
-                               split='train')
-        print("creating dataset:", name)
+                               split='train',
+                               sample_last_template=sample_last_template)
+        print(f"\033[93mcreating dataset:\033[0m {name}\n")
     return dataset
 
 
 def build_train_loader(cfg, dataset, settings):
-    print('start building dataloader')
+    print("\033[93mstart building dataloader >>>\033[0m\n")
 
     L_candidates = cfg.TRAIN.L
     P = cfg.MODEL.HEAD.P
@@ -80,7 +81,7 @@ def get_optimizer_scheduler(net, cfg):
 
 if __name__ == '__main__':
     from lib.config.loader import load_from_yaml
-    cfg = load_from_yaml('/home/yanjiezhang/Downloads/Dissertation/MainProj/experiments/fe108_mastrack.yaml')
+    cfg = load_from_yaml('/experiments/01_fe108_mastrack.yaml')
     from easydict import EasyDict
     settings = EasyDict()
     settings.env = EasyDict()
