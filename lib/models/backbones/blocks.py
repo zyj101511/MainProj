@@ -226,7 +226,7 @@ class MS_Attention_linear(nn.Module):
 
 
 class Cross_MS_Attention_linear(nn.Module):
-    def __init__(self, t: int, dim: int, num_heads=8, lambda_ratio=1, neuron_factory=None):
+    def __init__(self, t: int, dim: int, num_heads=8, lambda_ratio=1, bidirectional=False, neuron_factory=None):
         super().__init__()
         assert (dim % num_heads == 0), f"dim {dim} should be divided by num_heads {num_heads}."
         self.neuron_factory = neuron_factory

@@ -99,7 +99,9 @@ class MASTracker(BaseTracker):
             pred_score_map = pred_dict['score_map'][-1].detach().cpu()  # (1, H, W)
             fused_layer_feature = fused_feature[-1].mean(dim=0).detach().cpu()  # (H, W)
             branches_feature_list = [branch[-1][-1].mean(dim=0).detach().cpu() for branch in branches_out_list]  # list of (H, W)
-
+            cv_image = cv_image[:, :, ::-1].copy()
+            cv_search = cv_search[:, :, ::-1].copy()
+            cv_template = cv_template[:, :, ::-1].copy()
             self.visdom.register((cv_image, gt_bbox.tolist(), self.state.tolist()), 'Tracking', 1, 'Tracking')
             self.visdom.register(torch.from_numpy(cv_search).permute(2, 0, 1), 'image', 1, 'search_region')
             self.visdom.register(torch.from_numpy(cv_template).permute(2, 0, 1), 'image', 1, 'template')
@@ -161,7 +163,9 @@ class MASTracker(BaseTracker):
             pred_score_map = pred_dict['score_map'][-1].detach().cpu()  # (1, H, W)
             fused_layer_feature = fused_feature[-1].mean(dim=0).detach().cpu()  # (H, W)
             branches_feature_list = [branch[-1][-1].mean(dim=0).detach().cpu() for branch in branches_out_list]  # list of (H, W)
-
+            cv_image = cv_image[:, :, ::-1].copy()
+            cv_search = cv_search[:, :, ::-1].copy()
+            cv_template = cv_template[:, :, ::-1].copy()
             self.visdom.register((cv_image, gt_bbox.tolist(), self.state.tolist()), 'Tracking', 1, 'Tracking')
             self.visdom.register(torch.from_numpy(cv_search).permute(2, 0, 1), 'image', 1, 'search_region')
             self.visdom.register(torch.from_numpy(cv_template).permute(2, 0, 1), 'image', 1, 'template')

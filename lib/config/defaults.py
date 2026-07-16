@@ -19,6 +19,7 @@ class _DataCrop:
     SIZE:int   # 输入给模型的高宽
     SCALE_FACTOR: float
     SCALE_JITTER: float
+    CTR_JITTER: float
 
 @dataclass
 class _DATA:
@@ -37,14 +38,16 @@ class _DATA:
     # SEARCH
     SEARCH: _DataCrop = field(default_factory=lambda: _DataCrop(
         SIZE=256,
-        SCALE_FACTOR=1.5,
-        SCALE_JITTER=0.4
+        SCALE_FACTOR=1.2,
+        SCALE_JITTER=0.5,
+        CTR_JITTER=0.2
     ))
     # TEMPLATE
     TEMPLATE: _DataCrop = field(default_factory=lambda: _DataCrop(
         SIZE=128,
         SCALE_FACTOR=1,
-        SCALE_JITTER=1
+        SCALE_JITTER=1,
+        CTR_JITTER=0.2
     ))
 
 @dataclass

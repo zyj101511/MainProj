@@ -192,8 +192,8 @@ class BaseTrainer:
         for key in fields:
             if key in ignore_fields:
                 continue
-            if key == 'model':
-                net.load_state_dict(checkpoint_dict[key])
+            if key == 'model' or key == 'net':
+                net.load_state_dict(checkpoint_dict[key], strict=True)
             elif key == 'optimizer':
                 self.optimizer.load_state_dict(checkpoint_dict[key])
             elif key == 'lr_scheduler' and self.lr_scheduler is not None :

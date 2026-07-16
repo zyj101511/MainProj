@@ -1,6 +1,6 @@
 import os
 from torch import nn
-from lib.models.mastrack_plain import build_model
+from lib.models.mastrack_plain_CA import build_model
 from lib.train.trainer.mastrack_trainer import MASTrainer
 from lib.train.actor.mastrack_actor_plain import MASTrackActor
 from lib.utils.box_ops import giou_loss
@@ -47,7 +47,7 @@ def run(settings):
     # Build dataloaders
     for name in cfg.DATA.TRAIN.DATASETS_NAME:
         dataset = names2datasets_plain(name, settings, sample_last_template=settings.sample_last_template)
-    train_loader = build_train_loader_plain(cfg, dataset, settings)
+    train_loader = build_train_loader(cfg, dataset, settings)
     loaders = [train_loader]
 
     # Build network

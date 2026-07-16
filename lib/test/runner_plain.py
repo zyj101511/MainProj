@@ -104,9 +104,10 @@ if __name__ == '__main__':
     settings = Settings(training=False)
     settings.cfg = load_from_yaml("/home/yanjiezhang/Downloads/Dissertation/MainProj/experiments/fe108_mastrack.yaml")
 
-    dataset = FE108Dataset(settings.env.fe108_dir, split='train', T=1)
+    dataset = FE108Dataset(settings.env.fe108_dir, split='test', T=1)
     runner = MASTrackRunnerPlain(dataset, settings)
-    runner.run_sequence(10)
+    # runner.run_dataset()
+    runner.run_sequence(12)
 
 
 

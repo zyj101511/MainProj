@@ -2,9 +2,7 @@ import torch
 from torch import nn
 from pathlib import Path
 from lib.models.heads.track_head import build_track_head
-from lib.models.heads.trajectory_head import build_trajectory_head
-from lib.models.backbones.backbone_plain_CA import build_backbone_large, build_backbone_medium, build_backbone_small, build_backbone_tiny
-from lib.models.multi_timescale_module.multi_timescale_module import Multi_Timescale_Module
+from lib.models.backbones.backbone_plain import build_backbone_large, build_backbone_medium, build_backbone_small, build_backbone_tiny
 
 
 class MASTrack(nn.Module):

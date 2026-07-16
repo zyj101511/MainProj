@@ -3,6 +3,7 @@ import math
 import cv2 as cv
 import torch.nn.functional as F
 import numpy as np
+from lib.utils.box_ops import box_cxcywh_to_xyxy
 
 def crop_template(img, gt_box, scale_factor:float, reshape_sz):
     """ Extracts a square crop centered at target_bb box, of area search_area_factor^2 times target_bb area
@@ -79,18 +80,31 @@ def get_search_box(image, pred_box, scale_factor:float):
         raise Exception('Too small bounding box.')
 
     x1 = round(x + 0.5 * w - crop_sz * 0.5)
-    x2 = x1 + crop_sz
-
     y1 = round(y + 0.5 * h - crop_sz * 0.5)
+
+    x1 = max(0, min(x1, w_origin - crop_sz))
+    y1 = max(0, min(y1, h_origin - crop_sz))
+    x2 = x1 + crop_sz
     y2 = y1 + crop_sz
+    return torch.tensor([x1, y1, x2, y2], dtype=torch.float32, device=image.device)
 
-    x1_limit = max(0, x1)
-    x2_limit = min(x2, w_origin)
 
-    y1_limit = max(0, y1)
-    y2_limit = min(y2, h_origin)
+def get_search_box_plain(image, pred_box, scale_factor:float):
+    """ Extracts a square crop centered at target_bb box, of area search_area_factor^2 times target_bb area
 
-    return torch.tensor([x1_limit, y1_limit, x2_limit, y2_limit], dtype=torch.float32, device=image.device)
+    args:
+        img - TCHW tensor
+        pred_box - predicted box (4):(x, y, w, h) tensor
+        scale_factor - Ratio of crop size to target size
+        reshape_sz - (float) Size to which the extracted crop is resized (always square).
+    """
+
+    x, y, w, h = pred_box.tolist()
+    cx = x + 0.5 * w
+    cy = y + 0.5 * h
+    crop_sz = math.ceil(math.sqrt(w * h) * scale_factor)
+
+    return box_cxcywh_to_xyxy(torch.tensor([cx, cy, crop_sz, crop_sz], dtype=torch.float32, device=image.device))
 
 
 def crop_search(image, search_box, resize_sz):
@@ -119,3 +133,49 @@ def crop_search(image, search_box, resize_sz):
 
     return im_crop, H_scaler, W_scaler
 
+
+def crop_search_plain(image, search_box, resize_sz):
+    """ Extracts a square crop centered at target_bb box, of area search_area_factor^2 times target_bb area
+
+    args:
+        img - TCHW tensor
+        search_box - (4):(x1, y1, x2, y2)tensor
+        reshape_sz - (float) Size to which the extracted crop is resized (always square).
+
+    """
+    _, C, H, W = image.shape
+    x1, y1, x2, y2 = search_box.tolist()
+
+    x1, y1, x2, y2 = map(lambda v: int(round(v)), [x1, y1, x2, y2])
+
+    # 计算和原图的相交区域
+    src_x1 = max(0, x1)
+    src_y1 = max(0, y1)
+    src_x2 = min(W, x2)
+    src_y2 = min(H, y2)
+
+    crop_w = x2 - x1
+    crop_h = y2 - y1
+
+    # 先建一个带 padding 的 crop 画布tensor
+    crop = torch.zeros((1, C, crop_h, crop_w), dtype=image.dtype, device=image.device)
+
+    # 把原图有效区域拷进去
+    dst_x1 = src_x1 - x1
+    dst_y1 = src_y1 - y1
+    dst_x2 = dst_x1 + (src_x2 - src_x1)
+    dst_y2 = dst_y1 + (src_y2 - src_y1)
+
+    crop[0, :, dst_y1:dst_y2, dst_x1:dst_x2] = image[-1, :, src_y1:src_y2, src_x1:src_x2]
+
+    H_scaler = (y2 - y1) / resize_sz
+    W_scaler = (x2 - x1) / resize_sz
+
+    im_crop = F.interpolate(
+        crop,
+        size=(resize_sz, resize_sz),
+        mode="bilinear",
+        align_corners=False,
+    )
+
+    return im_crop, H_scaler, W_scaler

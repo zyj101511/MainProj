@@ -3,16 +3,17 @@ import random
 import torch
 import numpy as np
 from lib.train.data.utils.base_video_dataset import BaseSeqDataset
-from lib.train.data.utils.preprocessing import Preprocessor
+from lib.train.data.utils.preprocessing import Preprocessor_plain
 
 
 class FE108Dataset(BaseSeqDataset):
     """ Base class for video datasets """
 
-    def __init__(self, root, split: str, search_out_sz=256, template_out_sz=128, scale_factor=1.5, scale_jitter_factor=0.1, sample_last_template=0.5):
+    def __init__(self, root, split: str, search_out_sz=256, template_out_sz=128, scale_factor=4, scale_jitter_factor=0.5,
+                 ctr_jitter_factor=0.2, sample_last_template=0.5):
         super().__init__(root, split)
         self.meta = self.json_loader(self.lmdb, f"{split}/meta.json")['videos']
-        self.preprocessor = Preprocessor(search_out_sz, template_out_sz, scale_factor, scale_jitter_factor)
+        self.preprocessor = Preprocessor_plain(search_out_sz, template_out_sz, scale_factor, scale_jitter_factor, ctr_jitter_factor)
         self.sample_last_template = sample_last_template
 
     def __len__(self):
@@ -25,28 +26,19 @@ class FE108Dataset(BaseSeqDataset):
     def __getitem__(self, items: tuple):
         """
         Returns an entire sequence and ground truth or a clip of one sequence and ground truth
-        items: (seq_id, frame_start_id, L, P, distance_factor, T)
-                L is the length of the clip, P is the step of predictions
+        items: (seq_id, frame_start_id, T)
         """
         # print(f"Fetching item: {items}")
-        seq_id, frame_start_id, l, p, df, T = items
-        if l < 1 or p*df < l:
-            raise ValueError(f'clip length must be >= 1, and (prediction length * distance factor) must be >= clip length, but got {l} and {p*df}')
-        if df < 1:
-            raise ValueError(f"distance_factor should be >= 1, but got {df}")
-        if frame_start_id + l + p > self._get_num_frames(seq_id) or frame_start_id + l + df * p > self._get_num_frames(seq_id):
-            raise ValueError(f"(start+l+p) and (start+l+distance_factor*p) should be <= number of frames in the sequence, "
-                             f"but got {frame_start_id + l + p}, {frame_start_id + l + df * p} and number of frames={self._get_num_frames(seq_id)}")
-        search_array = self._get_frames(seq_id, list(range(frame_start_id, frame_start_id + l)), T=T)  # (L, T, 3, 260, 346)
-        search_anno_array = self._get_annos(seq_id, list(range(frame_start_id, frame_start_id + (l+df*p))))
+        seq_id, frame_start_id, T = items
+
+        search_array = self._get_frames(seq_id, [frame_start_id], T=T)  # (1, T, 3, 260, 346)
+        search_anno_array = self._get_annos(seq_id, [frame_start_id]) # (1, 4)
         if frame_start_id > 0:
-            # 一直用第一帧作为template
-            '''
+
             if random.random() < self.sample_last_template:
                 template_id = frame_start_id - 1
             else:
-                template_id = random.randint(0, frame_start_id - 1)'''
-            template_id = 0
+                template_id = random.randint(0, frame_start_id - 1)
         else:
             template_id = 0
 
@@ -111,13 +103,13 @@ class FE108Dataset(BaseSeqDataset):
 
     def _get_annos(self, seq_id, frame_ids):
         gt = self.txt_loader(self.lmdb, f"{self.split}/{self._get_seq_name(seq_id)}/gt.txt")
-        # (L+P*df, 4)
-        return gt[frame_ids]  # x, y, w, h
+        return gt[frame_ids]  #list of x, y, w, h
 
 if __name__ == '__main__':
     dataset = FE108Dataset(root='/home/yanjiezhang/Downloads/Dissertation/dataset/FE108_nbinsGTP_lmdb',
-                           split='train', search_out_sz=256, template_out_sz=128, scale_factor=1.3, scale_jitter_factor=0.1)
-    seq_id = 1
+                           split='train', search_out_sz=256, template_out_sz=128, scale_factor=4,
+                           scale_jitter_factor=0.5, ctr_jitter_factor=0.2, sample_last_template=0.1)
+    seq_id = 13
     frame_ids = [0, 1, 2]
     print(len(dataset))
     print(dataset._get_seq_name(seq_id))
@@ -126,16 +118,7 @@ if __name__ == '__main__':
     print(dataset._get_frame_keys(seq_id, frame_ids))
     imgs = dataset._get_frames(seq_id, frame_ids)
     gt = dataset._get_annos(seq_id, frame_ids)
-    for idx, img in enumerate(imgs):
-        print(img.shape)
-        img = img[0].transpose(1, 2, 0) # (C, H, W) -> (H, W, C)
-        img = np.ascontiguousarray(img)
-        cv2.rectangle(img, (int(gt[idx][0]), int(gt[idx][1])),
-                      (int(gt[idx][0])+int(gt[idx][2]), int(gt[idx][1])+int(gt[idx][3])), (0, 255, 0), 1)
-        cv2.imshow('img', img)
-        cv2.waitKey(0)
-    cv2.destroyAllWindows()
-    item = (seq_id, 0, 5, 4, 4, 1)
+    item = (seq_id, 155, 1)
     data = dataset[item]
     print(data.keys())
     print(len(data['template']))

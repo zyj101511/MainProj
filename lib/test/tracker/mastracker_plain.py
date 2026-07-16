@@ -7,7 +7,7 @@ from setuptools._distutils.compilers.C import unix
 from lib.models.mastrack_plain import build_model
 from lib.test.tracker.basetracker import BaseTracker
 from lib.utils.box_ops import clip_box_tensor
-from lib.test.data.utils.preprocessing_utils import crop_template, get_search_box, crop_search
+from lib.test.data.utils.preprocessing_utils import crop_template, get_search_box_plain, crop_search_plain
 
 
 class MASTracker(BaseTracker):
@@ -65,8 +65,8 @@ class MASTracker(BaseTracker):
         """image (T,C,H,W)"""
         T, C, H, W = image.shape
         self.frame_id += 1
-        search_box = get_search_box(image, self.search_box_state, self.settings.cfg.TEST.SEARCH_SCALE_FACTOR)  # search_box: (x1, y1, x2, y2) in original image coordinates
-        search_patch, H_scaler, W_scaler = crop_search(image, search_box, self.settings.cfg.DATA.SEARCH.SIZE)
+        search_box = get_search_box_plain(image, self.state, self.settings.cfg.TEST.SEARCH_SCALE_FACTOR)  # search_box: (x1, y1, x2, y2) in original image coordinates
+        search_patch, H_scaler, W_scaler = crop_search_plain(image, search_box, self.settings.cfg.DATA.SEARCH.SIZE)
         with torch.no_grad():
             '''pred_dict = {'pred_boxes': pred_box, # (B, 4) (cx, cy, w, h) normalized
                             'score_map': score_map_ctr, # (B, 1, H, W)
@@ -83,9 +83,6 @@ class MASTracker(BaseTracker):
             pred_box_original = self._map_bbox_to_original(normalized_pred_box, self.settings.cfg.DATA.SEARCH.SIZE, search_box, H_scaler, W_scaler)
             self.state = clip_box_tensor(pred_box_original, H, W, margin=self.settings.cfg.TEST.CLIP_BOX_MARGIN)  # (x, y, w, h) in original image coordinates
 
-            if self._need_update_search_box(self.state, search_box, margin_ratio=self.settings.cfg.TEST.SEARCH_BOX_UPDATE_MARGIN_RATIO):
-                self.search_box_state = self.state.clone()
-                self.model.reset_neurons()
 
         if self.debug > 0:
             cv_image = (image[-1].detach().cpu().numpy().transpose(1, 2, 0) * 255).clip(0,255).astype(np.uint8)
@@ -93,6 +90,9 @@ class MASTracker(BaseTracker):
             cv_template = (self.template[-1].detach().cpu().numpy().transpose(1, 2, 0) * 255).clip(0,255).astype(np.uint8)
             pred_score_map = pred_dict['score_map'][-1].detach().cpu()  # (1, H, W)
             fused_layer_feature = fused_feature.detach().cpu()  # (H, W)
+            cv_image = cv_image[:, :, ::-1].copy()
+            cv_search = cv_search[:, :, ::-1].copy()
+            cv_template = cv_template[:, :, ::-1].copy()
 
             self.visdom.register((cv_image, gt_bbox.tolist(), self.state.tolist()), 'Tracking', 1, 'Tracking')
             self.visdom.register(torch.from_numpy(cv_search).permute(2, 0, 1), 'image', 1, 'search_region')
@@ -134,10 +134,9 @@ class MASTracker(BaseTracker):
                             'a_deltas': a_deltas, # (B, df-1, 2)
                             'track_idx': idx
                            }'''
-            features = self.model.backbone(search=search_patch.unsqueeze(1), template=self.template.unsqueeze(1))
-            # fused_feature: (B, C, H, W), branches_out_list: list of (1, B, C, H, W)
-            fused_feature, branches_out_list = self.model._forward_multi_timescale_module(feature=features)
-            pred_dict = self.model._forward_head(fused_feature=fused_feature)
+            pred_dict = self.model(search=search_patch.unsqueeze(1), template=self.template.unsqueeze(1))
+
+            fused_feature = pred_dict['fused_feature'][-1].mean(dim=0)  # (H, W)
 
             normalized_pred_box = pred_dict['pred_boxes'][-1]  # (4) (cx, cy, w, h)
             pred_box_original = self._map_bbox_to_original(normalized_pred_box, self.settings.cfg.DATA.SEARCH.SIZE, search_box, H_scaler, W_scaler)
@@ -145,37 +144,33 @@ class MASTracker(BaseTracker):
 
 
         if self.debug > 0:
-            # 输入是0-255
             cv_image = (image[-1].detach().cpu().numpy().transpose(1, 2, 0) * 255).clip(0,255).astype(np.uint8)
             cv_search = (search_patch[-1].detach().cpu().numpy().transpose(1, 2, 0) * 255).clip(0,255).astype(np.uint8)
             cv_template = (self.template[-1].detach().cpu().numpy().transpose(1, 2, 0) * 255).clip(0,255).astype(np.uint8)
-
             pred_score_map = pred_dict['score_map'][-1].detach().cpu()  # (1, H, W)
-            fused_layer_feature = fused_feature[-1].mean(dim=0).detach().cpu()  # (H, W)
-            branches_feature_list = [branch[-1][-1].mean(dim=0).detach().cpu() for branch in branches_out_list]  # list of (H, W)
-
+            fused_layer_feature = fused_feature.detach().cpu()  # (H, W)
+            cv_image = cv_image[:, :, ::-1].copy()
+            cv_search = cv_search[:, :, ::-1].copy()
+            cv_template = cv_template[:, :, ::-1].copy()
             self.visdom.register((cv_image, gt_bbox.tolist(), self.state.tolist()), 'Tracking', 1, 'Tracking')
             self.visdom.register(torch.from_numpy(cv_search).permute(2, 0, 1), 'image', 1, 'search_region')
             self.visdom.register(torch.from_numpy(cv_template).permute(2, 0, 1), 'image', 1, 'template')
             self.visdom.register(pred_score_map.view(self.feat_sz, self.feat_sz), 'heatmap', 1, 'score_map')
             self.visdom.register(fused_layer_feature.view(self.feat_sz, self.feat_sz), 'heatmap', 2, 'fused_feature')
-            for i, branch_feature in enumerate(branches_feature_list):
-                self.visdom.register(branch_feature.view(self.feat_sz, self.feat_sz), 'heatmap', 2, f'branch_{i}_feature')
 
             while self.pause_mode:
                 if self.step:
                     self.step = False
                     break
-
         if self.save_plot:
             x, y, w, h = self.state.tolist()
-            # 输入是0-255
-            cv_image = (image[-1].detach().cpu().numpy().transpose(1, 2, 0) * 255).clip(0,255).astype(np.uint8)
+            cv_image = image[-1].detach().cpu().numpy().transpose(1, 2, 0)  # HWC
             cv2.rectangle(cv_image, (int(x), int(y)), (int(x + w), int(y + h)), (0, 255, 0), 1)
             write_img = cv_image[:, :, ::-1]
             save_path = os.path.join(self.save_dir, f'{self.settings.cur_seq_name}/frame_{self.frame_id:06d}.jpg')
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             cv2.imwrite(save_path, write_img)
+
         return {"pred_bbox": self.state}
 
 

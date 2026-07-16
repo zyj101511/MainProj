@@ -3,7 +3,9 @@ from lib.train.data.loader import MASLoader
 from lib.train.data.loader import mas_collate
 from lib.utils.misc import is_main_process
 from lib.train.data.dataset import FE108Dataset
+from lib.train.data.dataset_plain import FE108Dataset as FE108DatasetPlain
 from lib.train.data.sampler import DistributedTrackingPredSampler
+from lib.train.data.sampler_plain import DistributedTrackingPredSampler as DistributedTrackingPredSamplerPlain
 
 
 def update_settings(settings, cfg):
@@ -14,6 +16,7 @@ def update_settings(settings, cfg):
     settings.scheduler_type = cfg.TRAIN.OPTIMIZER.SCHEDULER.TYPE
     settings.search_scale_factor = cfg.DATA.SEARCH.SCALE_FACTOR
     settings.search_scale_jitter_factor = cfg.DATA.SEARCH.SCALE_JITTER
+    settings.search_ctr_jitter_factor = cfg.DATA.SEARCH.CTR_JITTER
     settings.search_output_sz = cfg.DATA.SEARCH.SIZE
     settings.template_output_sz = cfg.DATA.TEMPLATE.SIZE
 
@@ -33,6 +36,22 @@ def names2datasets(name: str, settings, sample_last_template):
         print(f"\033[93mcreating dataset:\033[0m {name}\n")
     return dataset
 
+def names2datasets_plain(name: str, settings, sample_last_template):
+    if name not in ["FE108", "VISEVENT", 'FELT']:
+        raise ValueError(f"Dataset {name} is not supported. Supported datasets are: FE108, VISEVENT, FELT.")
+    print("\033[93mstart creating dataset >>>\033[0m")
+    if name == "FE108":
+        dataset = FE108DatasetPlain(settings.env.fe108_dir,
+                               search_out_sz=settings.search_output_sz,
+                               template_out_sz=settings.template_output_sz,
+                               scale_factor=settings.search_scale_factor,
+                               scale_jitter_factor=settings.search_scale_jitter_factor,
+                               ctr_jitter_factor=settings.search_ctr_jitter_factor,
+                               split='train',
+                               sample_last_template=sample_last_template)
+        print(f"\033[93mcreating dataset:\033[0m {name}\n")
+    return dataset
+
 
 def build_train_loader(cfg, dataset, settings):
     print("\033[93mstart building dataloader >>>\033[0m\n")
@@ -45,6 +64,21 @@ def build_train_loader(cfg, dataset, settings):
 
     batch_sampler = DistributedTrackingPredSampler(dataset, settings.batchsize, samples_per_epoch,
                                         L_candidates, P=P, distance_factor=df, T=T)
+
+    train_loader = MASLoader(name='train', training=True, dataset=dataset, batch_sampler=batch_sampler,
+                       collate_fn=mas_collate, batch_dim=2, num_workers=cfg.TRAIN.NUM_WORKERS, epoch_interval=1)
+    return train_loader
+
+def build_train_loader_plain(cfg, dataset, settings):
+    print("\033[93mstart building dataloader >>>\033[0m\n")
+
+    L_candidates = cfg.TRAIN.L
+    P = cfg.MODEL.HEAD.P
+    df = cfg.MODEL.HEAD.DISTANCE_FACTOR
+    T = cfg.MODEL.T
+    samples_per_epoch = cfg.DATA.TRAIN.SAMPLES_PER_EPOCH
+
+    batch_sampler = DistributedTrackingPredSamplerPlain(dataset, settings.batchsize, samples_per_epoch, T=T)
 
     train_loader = MASLoader(name='train', training=True, dataset=dataset, batch_sampler=batch_sampler,
                        collate_fn=mas_collate, batch_dim=2, num_workers=cfg.TRAIN.NUM_WORKERS, epoch_interval=1)
