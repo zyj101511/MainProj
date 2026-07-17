@@ -327,7 +327,7 @@ def build_backbone_large(t):
     model = Spiking_vit_MetaFormer_Spike_SepConv(
         t=t,
         in_channels=3,
-        embed_dim=[64, 128, 256, 320],
+        embed_dim=[64, 128, 256, 360],
         num_heads=8,
         mlp_ratio=4,
         lambda_ratio=4,

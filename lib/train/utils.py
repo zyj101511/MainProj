@@ -4,8 +4,10 @@ from lib.train.data.loader import mas_collate
 from lib.utils.misc import is_main_process
 from lib.train.data.dataset import FE108Dataset
 from lib.train.data.dataset_plain import FE108Dataset as FE108DatasetPlain
+from lib.train.data.dataset_plain_plus import FE108DatasetPP
 from lib.train.data.sampler import DistributedTrackingPredSampler
 from lib.train.data.sampler_plain import DistributedTrackingPredSampler as DistributedTrackingPredSamplerPlain
+from lib.train.data.sampler_plain_plus import DistributedTrackingSamplerPP
 
 
 def update_settings(settings, cfg):
@@ -52,6 +54,21 @@ def names2datasets_plain(name: str, settings, sample_last_template):
         print(f"\033[93mcreating dataset:\033[0m {name}\n")
     return dataset
 
+def names2datasets_pp(name: str, settings, sample_last_template):
+    if name not in ["FE108", "VISEVENT", 'FELT']:
+        raise ValueError(f"Dataset {name} is not supported. Supported datasets are: FE108, VISEVENT, FELT.")
+    print("\033[93mstart creating dataset >>>\033[0m")
+    if name == "FE108":
+        dataset = FE108DatasetPP(settings.env.fe108_dir,
+                               search_out_sz=settings.search_output_sz,
+                               template_out_sz=settings.template_output_sz,
+                               scale_factor=settings.search_scale_factor,
+                               scale_jitter_factor=settings.search_scale_jitter_factor,
+                               ctr_jitter_factor=settings.search_ctr_jitter_factor,
+                               split='train',)
+        print(f"\033[93mcreating dataset:\033[0m {name}\n")
+    return dataset
+
 
 def build_train_loader(cfg, dataset, settings):
     print("\033[93mstart building dataloader >>>\033[0m\n")
@@ -72,9 +89,6 @@ def build_train_loader(cfg, dataset, settings):
 def build_train_loader_plain(cfg, dataset, settings):
     print("\033[93mstart building dataloader >>>\033[0m\n")
 
-    L_candidates = cfg.TRAIN.L
-    P = cfg.MODEL.HEAD.P
-    df = cfg.MODEL.HEAD.DISTANCE_FACTOR
     T = cfg.MODEL.T
     samples_per_epoch = cfg.DATA.TRAIN.SAMPLES_PER_EPOCH
 
@@ -83,6 +97,19 @@ def build_train_loader_plain(cfg, dataset, settings):
     train_loader = MASLoader(name='train', training=True, dataset=dataset, batch_sampler=batch_sampler,
                        collate_fn=mas_collate, batch_dim=2, num_workers=cfg.TRAIN.NUM_WORKERS, epoch_interval=1)
     return train_loader
+
+def build_train_loader_pp(cfg, dataset, settings):
+    print("\033[93mstart building dataloader >>>\033[0m\n")
+
+    T = cfg.MODEL.T
+    samples_per_epoch = cfg.DATA.TRAIN.SAMPLES_PER_EPOCH
+
+    batch_sampler = DistributedTrackingSamplerPP(dataset, settings.batchsize, samples_per_epoch, T=T)
+
+    train_loader = MASLoader(name='train', training=True, dataset=dataset, batch_sampler=batch_sampler,
+                       collate_fn=mas_collate, batch_dim=2, num_workers=cfg.TRAIN.NUM_WORKERS, epoch_interval=1)
+    return train_loader
+
 
 def build_test_loader(cfg, dataset, settings):
     raise NotImplementedError("Build test loader is not implemented yet.")

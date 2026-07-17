@@ -100,9 +100,13 @@ def get_search_box_plain(image, pred_box, scale_factor:float):
     """
 
     x, y, w, h = pred_box.tolist()
+    image_size = image.shape[2] * image.shape[3]
     cx = x + 0.5 * w
     cy = y + 0.5 * h
-    crop_sz = math.ceil(math.sqrt(w * h) * scale_factor)
+    if w * h > image_size * 0.5:
+        crop_sz = math.ceil(math.sqrt(w * h))
+    else:
+        crop_sz = math.ceil(math.sqrt(w * h) * scale_factor)
 
     return box_cxcywh_to_xyxy(torch.tensor([cx, cy, crop_sz, crop_sz], dtype=torch.float32, device=image.device))
 

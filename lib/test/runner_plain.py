@@ -106,8 +106,8 @@ if __name__ == '__main__':
 
     dataset = FE108Dataset(settings.env.fe108_dir, split='test', T=1)
     runner = MASTrackRunnerPlain(dataset, settings)
-    # runner.run_dataset()
-    runner.run_sequence(12)
+    runner.run_dataset()
+    # runner.run_sequence(1)
 
 
 

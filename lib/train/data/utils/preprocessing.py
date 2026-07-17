@@ -163,6 +163,7 @@ class Preprocessor():
                 "template": crop_resized_template}
 
 
+
 class Preprocessor_plain():
     def __init__(self, search_out_sz, template_out_sz, scale_factor=4, scale_jitter_factor=0.5, ctr_jitter_factor=0.2):
         self.search_out_sz = search_out_sz  # list (2), search and template
@@ -319,3 +320,129 @@ class Preprocessor_plain():
         return {"search": crop_resized_search,
                 "search_anno": search_anno,
                 "template": crop_resized_template}
+
+class Preprocessor_pp(Preprocessor_plain):
+
+    def __init__(
+        self,
+        search_out_sz,
+        template_out_sz,
+        scale_factor=4,
+        scale_jitter_factor=0.5,
+        ctr_jitter_factor=0.2,
+        template_area_factor=2.0,
+        template_center_jitter=0.0,
+        template_scale_jitter=0.0,
+    ):
+        super().__init__(
+            search_out_sz,
+            template_out_sz,
+            scale_factor=scale_factor,
+            scale_jitter_factor=scale_jitter_factor,
+            ctr_jitter_factor=ctr_jitter_factor,
+        )
+        self.search_area_factor = {
+            'search': float(scale_factor),
+            'template': float(template_area_factor),
+        }
+        self.output_sz = {
+            'search': int(search_out_sz),
+            'template': int(template_out_sz),
+        }
+        self.center_jitter_factor = {
+            'search': float(ctr_jitter_factor),
+            'template': float(template_center_jitter),
+        }
+        self.scale_jitter_factor_dict = {
+            'search': float(scale_jitter_factor),
+            'template': float(template_scale_jitter),
+        }
+
+    def _get_jittered_box(self, box, mode):
+        box = np.asarray(box, dtype=np.float32)
+        jittered_size = box[2:4] * np.exp(np.random.randn(2).astype(np.float32) * self.scale_jitter_factor_dict[mode])
+        max_offset = np.sqrt(max(jittered_size[0] * jittered_size[1], 1e-6)) * self.center_jitter_factor[mode]
+        jittered_center = box[0:2] + 0.5 * box[2:4] + max_offset * (np.random.rand(2).astype(np.float32) - 0.5)
+        return np.concatenate((jittered_center - 0.5 * jittered_size, jittered_size)).astype(np.float32)
+
+    def _sample_target(self, img_chw, target_bb, search_area_factor, output_sz):
+        img = img_chw.transpose(1, 2, 0)
+        x, y, w, h = [float(v) for v in target_bb]
+        crop_sz = int(np.ceil(np.sqrt(max(w * h, 1e-6)) * search_area_factor))
+        if crop_sz < 1:
+            raise ValueError('Too small bounding box')
+
+        x1 = round(x + 0.5 * w - crop_sz * 0.5)
+        x2 = x1 + crop_sz
+        y1 = round(y + 0.5 * h - crop_sz * 0.5)
+        y2 = y1 + crop_sz
+
+        x1_pad = max(0, -x1)
+        x2_pad = max(x2 - img.shape[1] + 1, 0)
+        y1_pad = max(0, -y1)
+        y2_pad = max(y2 - img.shape[0] + 1, 0)
+
+        img_crop = img[y1 + y1_pad:y2 - y2_pad, x1 + x1_pad:x2 - x2_pad, :]
+        img_crop_padded = cv2.copyMakeBorder(img_crop, y1_pad, y2_pad, x1_pad, x2_pad, cv2.BORDER_CONSTANT)
+
+        resize_factor = output_sz / crop_sz
+        img_crop_padded = cv2.resize(img_crop_padded, (output_sz, output_sz), interpolation=cv2.INTER_LINEAR)
+        return img_crop_padded.transpose(2, 0, 1), resize_factor
+
+    def _transform_image_to_crop(self, box_in, box_extract, resize_factor, crop_sz):
+        box_in = np.asarray(box_in, dtype=np.float32)
+        box_extract = np.asarray(box_extract, dtype=np.float32)
+        crop_sz = float(crop_sz)
+        box_extract_center = box_extract[0:2] + 0.5 * box_extract[2:4]
+        box_in_center = box_in[0:2] + 0.5 * box_in[2:4]
+        box_out_center = (crop_sz - 1.0) / 2.0 + (box_in_center - box_extract_center) * resize_factor
+        box_out_wh = box_in[2:4] * resize_factor
+        return np.concatenate((box_out_center - 0.5 * box_out_wh, box_out_wh)).astype(np.float32)
+
+    def _jittered_center_crop(self, frame_array, gt_array, mode):
+        box_extract = [self._get_jittered_box(gt_array[i], mode) for i in range(len(gt_array))]
+        crops = np.zeros((frame_array.shape[0], frame_array.shape[1], frame_array.shape[2], self.output_sz[mode], self.output_sz[mode]), dtype=frame_array.dtype)
+        box_crop = []
+
+        for l in range(frame_array.shape[0]):
+            resize_factor = None
+            for t in range(frame_array.shape[1]):
+                crop, resize_factor = self._sample_target(
+                    frame_array[l, t], box_extract[l], self.search_area_factor[mode], self.output_sz[mode]
+                )
+                crops[l, t] = crop
+            box_crop.append(self._transform_image_to_crop(gt_array[l], box_extract[l], resize_factor, self.output_sz[mode]))
+
+        return crops, np.asarray(box_crop, dtype=np.float32)
+
+    def _is_valid_sample(self, search_anno):
+        x, y, w, h = [float(v) for v in search_anno[0]]
+        crop_sz = self.output_sz['search']
+        if w < 1.0 or h < 1.0:
+            return False
+
+        cx = x + 0.5 * w
+        cy = y + 0.5 * h
+        if not (0.0 <= cx <= crop_sz and 0.0 <= cy <= crop_sz):
+            return False
+
+        x1 = max(0.0, x)
+        y1 = max(0.0, y)
+        x2 = min(float(crop_sz), x + w)
+        y2 = min(float(crop_sz), y + h)
+        inter = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+        area = max(w * h, 1e-6)
+        if inter / area < 0.25:
+            return False
+        return True
+
+    def __call__(self, search_array, search_anno_array, template_array, template_anno_array):
+        template_crop, template_box = self._jittered_center_crop(template_array, template_anno_array, 'template')
+        search_crop, search_box = self._jittered_center_crop(search_array, search_anno_array, 'search')
+        valid = self._is_valid_sample(search_box)
+        return {
+            'search': search_crop,
+            'search_anno': search_box,
+            'template': template_crop,
+            'valid': valid,
+        }

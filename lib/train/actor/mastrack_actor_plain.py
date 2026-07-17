@@ -1,7 +1,7 @@
 import torch
 import warnings
 from lib.train.actor.base_actor import BaseActor
-from lib.utils.box_ops import box_cxcywh_to_xyxy, box_xywh_to_xyxy, box_xywh_to_cxcywh
+from lib.utils.box_ops import box_cxcywh_to_xyxy, box_xywh_to_xyxy, box_xywh_to_cxcywh, box_xyxy_to_xywh
 from lib.utils.heapmap_utils import generate_heatmap
 
 class MASTrackActor(BaseActor):
@@ -54,8 +54,11 @@ class MASTrackActor(BaseActor):
         gt_bbox_norm[..., 0::2] = gt_bbox_norm[..., 0::2] / self.cfg.DATA.SEARCH.SIZE
         gt_bbox_norm[..., 1::2] = gt_bbox_norm[..., 1::2] / self.cfg.DATA.SEARCH.SIZE
 
+        gt_boxes_vec = box_xywh_to_xyxy(gt_bbox_norm).clamp(min=0.0, max=1.0)
+
+        gt_bbox_for_map = box_xyxy_to_xywh(box_xywh_to_xyxy(gt_bbox_norm))
         gt_gaussion_maps = generate_heatmap(
-            gt_bbox_norm.unsqueeze(0),
+            gt_bbox_for_map.unsqueeze(0),
             self.cfg.DATA.SEARCH.SIZE,
             self.cfg.MODEL.BACKBONE.STRIDE
         )#  # list of length N, each elem is (B, H, W)
@@ -67,7 +70,6 @@ class MASTrackActor(BaseActor):
         if torch.isnan(pred_boxes).any():
             raise ValueError("Network outputs is NAN! Stop Training")
         pred_boxes_vec = box_cxcywh_to_xyxy(pred_boxes) # (B, 4)  # 全部转成左上角和右下角坐标表示来计算loss
-        gt_boxes_vec = box_xywh_to_xyxy(gt_bbox_norm)  # (B, 4)
 
         # compute giou and iou
         device = pred_boxes.device
