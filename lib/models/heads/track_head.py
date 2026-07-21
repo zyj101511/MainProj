@@ -12,7 +12,7 @@ class _conv(nn.Module):
                            norm=None,
                            decay=False,
                            decay_rate=0.25,
-                           state_clip=(-0.5, 4),
+                           state_clip=(-4, 4),
                            learnable_decay=False,
                            mem=False,
                            infere_mode=False,
@@ -116,7 +116,7 @@ class CenterPredictor(nn.Module):
         score_map_size = self.conv5_size(x_size4)
         # (B, 1, H, W) (B, 2, H, W) (B, 2, H, W)
         # offset要不要归一化到[-1, 1]?
-        return _clamp_sigmoid(score_map_ctr), 2*_clamp_sigmoid(score_map_offset)-1, _clamp_sigmoid(score_map_size)
+        return _clamp_sigmoid(score_map_ctr), score_map_offset, _clamp_sigmoid(score_map_size)
 
     def get_idx(self, score_map_ctr):
         score_map_ctr = score_map_ctr.squeeze(1)  # (B, H, W)

@@ -78,7 +78,7 @@ class MASTrainer(BaseTrainer):
             for l in range(L):
                 cur_data = {
                     'search': search[l],  # (T, B, C, H, W)
-                    'template': template[0][-1].unsqueeze(0),  # (1, B, C, H, W)
+                    'template': template[0],  # (T, B, C, H, W)
                     'search_anno': search_anno[:, l:l+1+self.settings.p*self.settings.distance_factor, :],  # 这个要按你actor期望再对齐
                 }
 

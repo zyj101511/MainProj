@@ -18,6 +18,9 @@ class FE108DatasetPP(BaseSeqDataset):
         scale_factor=4,
         scale_jitter_factor=0.5,
         ctr_jitter_factor=0.2,
+        template_scale_factor=2.0,
+        template_center_jitter=0.0,
+        template_scale_jitter=0.0,
     ):
         super().__init__(root, split)
         self.meta = self.json_loader(self.lmdb, f"{split}/meta.json")["videos"]
@@ -27,6 +30,9 @@ class FE108DatasetPP(BaseSeqDataset):
             scale_factor,
             scale_jitter_factor,
             ctr_jitter_factor,
+            template_scale_factor=template_scale_factor,
+            template_center_jitter=template_center_jitter,
+            template_scale_jitter=template_scale_jitter,
         )
 
     def __len__(self):
@@ -38,8 +44,8 @@ class FE108DatasetPP(BaseSeqDataset):
         """
         seq_id, template_frame_id, search_frame_id, T = items
         data = None
-
-        for _ in range(20):
+        valid = False
+        while not valid:
             search_array = self._get_frames(seq_id, [search_frame_id], T=T)
             search_anno_array = self._get_annos(seq_id, [search_frame_id])
 
@@ -52,10 +58,10 @@ class FE108DatasetPP(BaseSeqDataset):
                 template_array,
                 template_anno_array,
             )
-            if data["valid"]:
-                break
+            valid = data["valid"]
 
-            seq_id, template_frame_id, search_frame_id = self._resample_item(seq_id)
+            if not valid:
+                seq_id, template_frame_id, search_frame_id = self._resample_item(seq_id)
 
         data["search"] = torch.from_numpy(data["search"]).float() / 255.0
         data["template"] = torch.from_numpy(data["template"]).float() / 255.0

@@ -330,7 +330,7 @@ class Preprocessor_pp(Preprocessor_plain):
         scale_factor=4,
         scale_jitter_factor=0.5,
         ctr_jitter_factor=0.2,
-        template_area_factor=2.0,
+        template_scale_factor=2.0,
         template_center_jitter=0.0,
         template_scale_jitter=0.0,
     ):
@@ -343,7 +343,7 @@ class Preprocessor_pp(Preprocessor_plain):
         )
         self.search_area_factor = {
             'search': float(scale_factor),
-            'template': float(template_area_factor),
+            'template': float(template_scale_factor),
         }
         self.output_sz = {
             'search': int(search_out_sz),

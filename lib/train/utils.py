@@ -19,6 +19,9 @@ def update_settings(settings, cfg):
     settings.search_scale_factor = cfg.DATA.SEARCH.SCALE_FACTOR
     settings.search_scale_jitter_factor = cfg.DATA.SEARCH.SCALE_JITTER
     settings.search_ctr_jitter_factor = cfg.DATA.SEARCH.CTR_JITTER
+    settings.template_scale_factor = cfg.DATA.TEMPLATE.SCALE_FACTOR
+    settings.template_center_jitter = cfg.DATA.TEMPLATE.CTR_JITTER
+    settings.template_scale_jitter = cfg.DATA.TEMPLATE.SCALE_JITTER
     settings.search_output_sz = cfg.DATA.SEARCH.SIZE
     settings.template_output_sz = cfg.DATA.TEMPLATE.SIZE
 
@@ -65,6 +68,9 @@ def names2datasets_pp(name: str, settings, sample_last_template):
                                scale_factor=settings.search_scale_factor,
                                scale_jitter_factor=settings.search_scale_jitter_factor,
                                ctr_jitter_factor=settings.search_ctr_jitter_factor,
+                               template_scale_factor=settings.template_scale_factor,
+                               template_center_jitter=settings.template_center_jitter,
+                               template_scale_jitter=settings.template_scale_jitter,
                                split='train',)
         print(f"\033[93mcreating dataset:\033[0m {name}\n")
     return dataset

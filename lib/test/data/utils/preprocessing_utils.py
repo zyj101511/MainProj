@@ -103,7 +103,7 @@ def get_search_box_plain(image, pred_box, scale_factor:float):
     image_size = image.shape[2] * image.shape[3]
     cx = x + 0.5 * w
     cy = y + 0.5 * h
-    if w * h > image_size * 0.5:
+    if w * h > image_size * 0.4:
         crop_sz = math.ceil(math.sqrt(w * h))
     else:
         crop_sz = math.ceil(math.sqrt(w * h) * scale_factor)
@@ -147,7 +147,7 @@ def crop_search_plain(image, search_box, resize_sz):
         reshape_sz - (float) Size to which the extracted crop is resized (always square).
 
     """
-    _, C, H, W = image.shape
+    T, C, H, W = image.shape
     x1, y1, x2, y2 = search_box.tolist()
 
     x1, y1, x2, y2 = map(lambda v: int(round(v)), [x1, y1, x2, y2])
@@ -162,7 +162,7 @@ def crop_search_plain(image, search_box, resize_sz):
     crop_h = y2 - y1
 
     # 先建一个带 padding 的 crop 画布tensor
-    crop = torch.zeros((1, C, crop_h, crop_w), dtype=image.dtype, device=image.device)
+    crop = torch.zeros((T, C, crop_h, crop_w), dtype=image.dtype, device=image.device)
 
     # 把原图有效区域拷进去
     dst_x1 = src_x1 - x1
@@ -170,7 +170,7 @@ def crop_search_plain(image, search_box, resize_sz):
     dst_x2 = dst_x1 + (src_x2 - src_x1)
     dst_y2 = dst_y1 + (src_y2 - src_y1)
 
-    crop[0, :, dst_y1:dst_y2, dst_x1:dst_x2] = image[-1, :, src_y1:src_y2, src_x1:src_x2]
+    crop[:, :, dst_y1:dst_y2, dst_x1:dst_x2] = image[:, :, src_y1:src_y2, src_x1:src_x2]
 
     H_scaler = (y2 - y1) / resize_sz
     W_scaler = (x2 - x1) / resize_sz
@@ -183,3 +183,55 @@ def crop_search_plain(image, search_box, resize_sz):
     )
 
     return im_crop, H_scaler, W_scaler
+
+
+def sample_target(image, target_bb, search_area_factor, output_sz):
+    x, y, w, h = [float(v) for v in target_bb.tolist()]
+    crop_sz = int(np.ceil(np.sqrt(max(w * h, 1e-6)) * search_area_factor))
+    if crop_sz < 1:
+        raise ValueError("Too small bounding box")
+
+    x1 = round(x + 0.5 * w - crop_sz * 0.5)
+    x2 = x1 + crop_sz
+    y1 = round(y + 0.5 * h - crop_sz * 0.5)
+    y2 = y1 + crop_sz
+
+    x1_pad = max(0, -x1)
+    x2_pad = max(x2 - image.shape[3] + 1, 0)
+    y1_pad = max(0, -y1)
+    y2_pad = max(y2 - image.shape[2] + 1, 0)
+
+    img_crop = image[:, :, y1 + y1_pad:y2 - y2_pad, x1 + x1_pad:x2 - x2_pad]
+    img_crop = torch.nn.functional.pad(
+      img_crop,
+      (x1_pad, x2_pad, y1_pad, y2_pad),
+      mode="constant",
+      value=0,
+    )
+
+    resize_factor = output_sz / crop_sz
+    img_crop = torch.nn.functional.interpolate(
+      img_crop,
+      size=(output_sz, output_sz),
+      mode="bilinear",
+      align_corners=False,
+    )
+
+    crop_box = torch.tensor([x1, y1, crop_sz, crop_sz], dtype=torch.float32, device=image.device)
+    return img_crop, resize_factor, crop_box
+
+
+def _map_bbox_to_original(normalized_bbox, search_size, crop_box, resize_factor):
+    cx = normalized_bbox[0] * search_size
+    cy = normalized_bbox[1] * search_size
+    w = normalized_bbox[2] * search_size
+    h = normalized_bbox[3] * search_size
+
+    crop_x, crop_y, _, _ = crop_box
+    cx = cx / resize_factor + crop_x
+    cy = cy / resize_factor + crop_y
+    w = w / resize_factor
+    h = h / resize_factor
+
+    return torch.stack([cx, cy, w, h], dim=-1)
+

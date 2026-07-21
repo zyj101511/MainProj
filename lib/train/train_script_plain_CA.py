@@ -46,8 +46,8 @@ def run(settings):
 
     # Build dataloaders
     for name in cfg.DATA.TRAIN.DATASETS_NAME:
-        dataset = names2datasets_plain(name, settings, sample_last_template=settings.sample_last_template)
-    train_loader = build_train_loader(cfg, dataset, settings)
+        dataset = names2datasets_pp(name, settings, sample_last_template=settings.sample_last_template)
+    train_loader = build_train_loader_pp(cfg, dataset, settings)
     loaders = [train_loader]
 
     # Build network
@@ -104,4 +104,4 @@ def run(settings):
                          settings=settings,
                          use_amp=use_amp)
 
-    trainer.train(cfg.TRAIN.EPOCH, load_latest=settings.load_latest_ckpt, load_pretrained_ckpt=settings.from_pretrained)
+    trainer.train(cfg.TRAIN.EPOCH, load_latest=settings.load_latest_ckpt, ignore_fields=['optimizer', 'lr_scheduler', 'settings'], load_pretrained_ckpt=settings.from_pretrained)

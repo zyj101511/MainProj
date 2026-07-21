@@ -4,10 +4,10 @@ import os
 import numpy as np
 from setuptools._distutils.compilers.C import unix
 
-from lib.models.mastrack_plain import build_model
+from lib.models.mastrack_plain_CA import build_model
 from lib.test.tracker.basetracker import BaseTracker
 from lib.utils.box_ops import clip_box_tensor
-from lib.test.data.utils.preprocessing_utils import crop_template, get_search_box_plain, crop_search_plain
+from lib.test.data.utils.preprocessing_utils import crop_template, get_search_box_plain, crop_search_plain, sample_target, _map_bbox_to_original
 
 
 class MASTracker(BaseTracker):
@@ -65,8 +65,12 @@ class MASTracker(BaseTracker):
         """image (T,C,H,W)"""
         T, C, H, W = image.shape
         self.frame_id += 1
-        search_box = get_search_box_plain(image, self.state, self.settings.cfg.TEST.SEARCH_SCALE_FACTOR)  # search_box: (x1, y1, x2, y2) in original image coordinates
-        search_patch, H_scaler, W_scaler = crop_search_plain(image, search_box, self.settings.cfg.DATA.SEARCH.SIZE)
+        search_patch, resize_factor, search_box = sample_target(
+            image,
+            self.state,
+            self.settings.cfg.TEST.SEARCH_SCALE_FACTOR,
+            self.settings.cfg.DATA.SEARCH.SIZE
+        )
         with torch.no_grad():
             '''pred_dict = {'pred_boxes': pred_box, # (B, 4) (cx, cy, w, h) normalized
                             'score_map': score_map_ctr, # (B, 1, H, W)
@@ -80,7 +84,7 @@ class MASTracker(BaseTracker):
             fused_feature = pred_dict['fused_feature'][-1].mean(dim=0)  # (H, W)
 
             normalized_pred_box = pred_dict['pred_boxes'][-1]  # (4) (cx, cy, w, h)
-            pred_box_original = self._map_bbox_to_original(normalized_pred_box, self.settings.cfg.DATA.SEARCH.SIZE, search_box, H_scaler, W_scaler)
+            pred_box_original = _map_bbox_to_original(normalized_pred_box, self.settings.cfg.DATA.SEARCH.SIZE, search_box, resize_factor)
             self.state = clip_box_tensor(pred_box_original, H, W, margin=self.settings.cfg.TEST.CLIP_BOX_MARGIN)  # (x, y, w, h) in original image coordinates
 
 
@@ -122,7 +126,12 @@ class MASTracker(BaseTracker):
         T, C, H, W = image.shape
         self.frame_id += 1
         search_box = torch.tensor([0, 0, W, H], dtype=torch.float32, device=image.device)
-        search_patch, H_scaler, W_scaler = crop_search_plain(image, search_box, self.settings.cfg.DATA.SEARCH.SIZE)
+        search_patch, resize_factor, search_box = self._sample_target_like_train(
+            image,
+            search_box,
+            self.settings.cfg.TEST.SEARCH_SCALE_FACTOR,
+            self.settings.cfg.DATA.SEARCH.SIZE,
+        )
         with torch.no_grad():
             '''pred_dict = {'pred_boxes': pred_box, # (B, 4) (cx, cy, w, h) normalized
                             'score_map': score_map_ctr, # (B, 1, H, W)
@@ -139,7 +148,7 @@ class MASTracker(BaseTracker):
             fused_feature = pred_dict['fused_feature'][-1].mean(dim=0)  # (H, W)
 
             normalized_pred_box = pred_dict['pred_boxes'][-1]  # (4) (cx, cy, w, h)
-            pred_box_original = self._map_bbox_to_original(normalized_pred_box, self.settings.cfg.DATA.SEARCH.SIZE, search_box, H_scaler, W_scaler)
+            pred_box_original = _map_bbox_to_original(normalized_pred_box, self.settings.cfg.DATA.SEARCH.SIZE, search_box, resize_factor)
             self.state = clip_box_tensor(pred_box_original, H, W, margin=self.settings.cfg.TEST.CLIP_BOX_MARGIN)  # (x, y, w, h) in original image coordinates
 
 

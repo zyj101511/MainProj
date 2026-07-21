@@ -1,6 +1,7 @@
 import os
 import glob
 import torch
+from pathlib import Path
 import traceback
 from lib.train.admin import multigpu
 from torch.utils.data.distributed import DistributedSampler
@@ -55,19 +56,19 @@ class BaseTrainer:
         else:
             self._checkpoint_dir = None
 
-    def train(self, max_epochs, load_latest=False, load_pretrained_ckpt=False):
+    def train(self, max_epochs, load_latest=False, ignore_fields=None, load_pretrained_ckpt=False):
         """Do training for the given number of epochs.
         args:
             max_epochs - Max number of training epochs,
             load_latest - Bool indicating whether to resume from latest epoch.
+            ignore_fields - List of fields to ignore when loading checkpoint.
             load_pretrained_ckpt - Bool indicating whether to load pretrained weights.
         """
-
         if load_latest and load_pretrained_ckpt:
             raise ValueError('load_latest and load_pretrained_ckpt cannot be True at the same time.')
         try:
             if load_latest:  # 断点重训, 恢复optimizer
-                self.load_checkpoint()
+                self.load_checkpoint(ignore_fields=ignore_fields)
             if load_pretrained_ckpt:  # 加载预训练权重
                 self.load_state_dict(self.settings.env.pretrained_ckpt_dir)
 
@@ -196,8 +197,8 @@ class BaseTrainer:
                 net.load_state_dict(checkpoint_dict[key], strict=True)
             elif key == 'optimizer':
                 self.optimizer.load_state_dict(checkpoint_dict[key])
-            elif key == 'lr_scheduler' and self.lr_scheduler is not None :
-                if checkpoint_dict[key] is not None:
+            elif key == 'lr_scheduler':
+                if self.lr_scheduler is not None and checkpoint_dict[key] is not None:
                     self.lr_scheduler.load_state_dict(checkpoint_dict[key])
             else:
                 setattr(self, key, checkpoint_dict[key])
@@ -260,7 +261,7 @@ class BaseTrainer:
         print(f"\033[93mLoading pretrained_ckpt from:\033[0m {checkpoint_path}")
         checkpoint_dict = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
-        if net_type != checkpoint_dict['net_type']:
+        if 'net_type' in checkpoint_dict and net_type != checkpoint_dict['net_type']:
             raise ValueError(f'Network type mismatch: current={net_type},pretrained_checkpoint={checkpoint_dict["net_type"]}')
 
         if "model" in checkpoint_dict:

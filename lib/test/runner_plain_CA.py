@@ -4,7 +4,7 @@ import time
 import numpy as np
 from tqdm import tqdm
 
-from lib.test.tracker.mastracker_plain import MASTracker
+from lib.test.tracker.mastracker_plain_CA import MASTracker
 
 
 class MASTrackRunnerPlain:
@@ -104,8 +104,8 @@ if __name__ == '__main__':
 
     dataset = FE108Dataset(settings.env.fe108_dir, split='test', T=1)
     runner = MASTrackRunnerPlain(dataset, settings)
-    runner.run_dataset()
-    # runner.run_sequence(2)
+    # runner.run_dataset()
+    runner.run_sequence(1)
 
 
 
