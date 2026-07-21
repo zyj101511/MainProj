@@ -57,7 +57,7 @@ def main():
     parser.add_argument('--script_name', type=str, required=True, help='Name of the training script.')
     parser.add_argument('--config_name', type=str, required=True, help='Name of the configuration file.')
     parser.add_argument('--cudnn_benchmark', action='store_true', help='Use cudnn benchmark.')
-    parser.add_argument('--local_rank', type=int, default=-1, help='Local rank for distributed training.')
+    parser.add_argument('--local-rank', type=int, default=-1, help='Local rank for distributed training.')
     parser.add_argument('--save_dir', type=str, default=None, help='Directory to save logs and checkpoints.')
     parser.add_argument('--base_seed', type=int, default=None, help='Base seed for random number generators.')
 

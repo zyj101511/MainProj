@@ -113,7 +113,9 @@ class MASTrainer(BaseTrainer):
                     self.scaler.update()
 
             # reset neuron states after each forward pass
-            if hasattr(self.actor.net, "reset_neurons"):
+            if hasattr(self.actor.net, "module"):
+                self.actor.net.module.reset_neurons()
+            elif hasattr(self.actor.net, "reset_neurons"):
                 self.actor.net.reset_neurons()
             else:
                 raise NotImplementedError("The network should implement a reset_neurons method to reset the neuron states after each forward pass.")
