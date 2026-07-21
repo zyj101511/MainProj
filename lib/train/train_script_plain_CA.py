@@ -58,7 +58,7 @@ def run(settings):
         torch.cuda.set_device(settings.local_rank)
         net = net.to(settings.local_rank)
         net = DDP(net, device_ids=[settings.local_rank],
-                  output_device=settings.local_rank, find_unused_parameters=True)
+                  output_device=settings.local_rank, find_unused_parameters=False)
         settings.device = torch.device(f"cuda:{settings.local_rank}")
 
     else:

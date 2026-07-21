@@ -44,7 +44,7 @@ TRAIN:
   - 3
   - 4
   - 5
-  NUM_WORKERS: 0
+  NUM_WORKERS: 4
   OPTIMIZER:
     TYPE: ADAMW
     LR: 0.0004
