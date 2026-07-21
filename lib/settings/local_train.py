@@ -1,7 +1,7 @@
 class EnvironmentSettings:
     def __init__(self):
-        self.workspace_dir = '/home/yanjiezhang/Downloads/Dissertation/MainProj'  # Base directory for saving network checkpoints.
-        self.tensorboard_dir = '/home/yanjiezhang/Downloads/Dissertation/MainProj/tensorboard'    # Directory for tensorboard files.
+        self.workspace_dir = '/user/work/rm25043/Dissertation/MainProj'  # Base directory for saving network checkpoints.
+        self.tensorboard_dir = '/user/work/rm25043/Dissertation/MainProj/tensorboard'    # Directory for tensorboard files.
         self.pretrained_ckpt_dir = None
-        self.fe108_dir = '/home/yanjiezhang/Downloads/Dissertation/dataset/FE108_GTP_lmdb'
-        self.visevent_dir = '/home/yanjiezhang/Downloads/Dissertation/dataset/VisEvent/train'
+        self.fe108_dir = '/user/work/rm25043/Dissertation/dataset/FE108_GTP_lmdb'
+        self.visevent_dir = '/user/work/rm25043/Dissertation/dataset/VisEvent/train'

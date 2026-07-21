@@ -17,7 +17,7 @@ def create_default_local_file_ITP_test(workspace_dir, data_dir, save_dir):
     comment = {'results_path': 'Where to store tracking results',
                'network_path': 'Where tracking networks are stored.'}
 
-    path = os.path.join(os.path.dirname(__file__), 'local_test.py')
+    path = os.path.join(os.path.dirname(__file__), 'local_test_local.py')
     with open(path, 'w') as f:
         settings = EnvSettings_ITP(workspace_dir, data_dir, save_dir)
 
@@ -45,7 +45,7 @@ def env_settings():
         env_module = importlib.import_module(env_module_name)
         return env_module.local_test_env_settings()
     except:
-        env_file = os.path.join(os.path.dirname(__file__), 'local_test.py')
+        env_file = os.path.join(os.path.dirname(__file__), 'local_test_local.py')
         raise RuntimeError('YOU HAVE NOT SETUP YOUR local.py!!!\n Go to "{}" and set all the paths you need. '
                            'Then try to run again.'.format(env_file))
 if __name__ == '__main__':

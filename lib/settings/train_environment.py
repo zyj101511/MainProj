@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 
 def create_default_local_file_ITP_train(workspace_dir=None, data_dir=None):
-    path = os.path.join(os.path.dirname(__file__), 'local_train.py')
+    path = os.path.join(os.path.dirname(__file__), 'local_train_local.py')
 
     empty_str = '\'\''
     default_settings = OrderedDict({

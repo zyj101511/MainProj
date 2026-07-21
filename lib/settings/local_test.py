@@ -5,13 +5,13 @@ def local_test_env_settings():
 
     # Set your local paths here.
 
-    settings.workspace_dir = '/home/yanjiezhang/Downloads/Dissertation/MainProj'
-    settings.save_dir = '/home/yanjiezhang/Downloads/Dissertation/MainProj/tracking_results'
-    settings.results_txt_path = '/home/yanjiezhang/Downloads/Dissertation/MainProj/tracking_results/txt_results'
-    settings.result_plot_path = '/home/yanjiezhang/Downloads/Dissertation/MainProj/tracking_results/plot_results'
+    settings.workspace_dir = '/user/work/rm25043/Dissertation/MainProj'
+    settings.save_dir = '/user/work/rm25043/Dissertation/MainProj/tracking_results'
+    settings.results_txt_path = '/user/work/rm25043/Dissertation/MainProj/tracking_results/txt_results'
+    settings.result_plot_path = '/user/work/rm25043/Dissertation/MainProj/tracking_results/plot_results'
     settings.checkpoint_path = ''
-    settings.fe108_dir = '/home/yanjiezhang/Downloads/Dissertation/dataset/FE108_GTP_lmdb'
-    settings.visevent_dir = '/home/yanjiezhang/Downloads/Dissertation/dataset/VisEvent/test'
+    settings.fe108_dir = '/user/work/rm25043/Dissertation/dataset/FE108_GTP_lmdb'
+    settings.visevent_dir = '/user/work/rm25043/Dissertation/dataset/VisEvent/test'
 
     return settings
 
