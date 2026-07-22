@@ -245,21 +245,18 @@ class Cross_MS_Attention_linear(nn.Module):
             nn.Conv2d(dim, dim, 1, 1, bias=False),
             nn.BatchNorm2d(dim)
         )
-
         self.q_spike_search = self.neuron_factory(t=t)
 
         self.k_conv = SeqToANNContainer(
             nn.Conv2d(dim, dim, 1, 1, bias=False),
             nn.BatchNorm2d(dim)
         )
-
-        self.k_spike_template = self.neuron_factory(t=t)
-
         self.v_conv = SeqToANNContainer(
             nn.Conv2d(dim, int(dim * lambda_ratio), 1, 1, bias=False),
             nn.BatchNorm2d(int(dim * lambda_ratio))
         )
 
+        self.k_spike_template = self.neuron_factory(t=t)
         self.v_spike_template = self.neuron_factory(t=t)
 
         if self.bidirectional:
@@ -267,28 +264,43 @@ class Cross_MS_Attention_linear(nn.Module):
             self.k_spike_search = self.neuron_factory(t=t)
             self.v_spike_search = self.neuron_factory(t=t)
 
-        self.attn_spike = self.neuron_factory(t=t)
+        self.search_attn_spike = self.neuron_factory(t=t)
+        self.template_attn_spike = self.neuron_factory(t=t)
 
-        self.proj_conv = SeqToANNContainer(
+        self.search_proj_conv = SeqToANNContainer(
+            nn.Conv2d(dim * lambda_ratio, dim, 1, 1, bias=False),
+            nn.BatchNorm2d(dim)
+        )
+        self.template_proj_conv = SeqToANNContainer(
             nn.Conv2d(dim * lambda_ratio, dim, 1, 1, bias=False),
             nn.BatchNorm2d(dim)
         )
 
     def forward(self, x):
-        T, B, C, H, W = x.shape  # [T, B, 256, 18, 18]
+        T, B, C, H, W = x.shape  # [T, B, C, 18, 18]
         N = H * W
 
-        x = x.flatten(3)  # [T, B, 256, 324]
-        x = x[..., :320]  # [T, B, 256, 320]
+        x_flat = x.flatten(3)  # [T, B, C, 324]
+        x_main = x_flat[..., :320]  # [T, B, C, 320]
 
-        search = x[..., :256]  # [T, B, 256, 256]
-        template = x[..., 256:320]  # [T, B, 256, 64]
+        search = x_main[..., :256]  # [T, B, C, 256]
+        template = x_main[..., 256:320]  # [T, B, C, 64]
 
-        template = template.reshape(T, B, C, 8, 8)
         search = search.reshape(T, B, C, 16, 16)
+        template = template.reshape(T, B, C, 8, 8)
 
-        template = self.head_spike_template(template)  # [T, B, 256, 8, 8]
-        search = self.head_spike_search(search)  # [T, B, 256, 16, 16]
+        # Build T x T temporal pairs:
+        # search_t paired with template_tau for all t, tau
+        template = (
+            template.unsqueeze(0)
+            .expand(T, T, B, C, 8, 8)
+            .contiguous()
+            .view(T * T, B, C, 8, 8)
+        )
+        search = torch.repeat_interleave(search, repeats=T, dim=0)  # [T*T, B, C, 16, 16]
+
+        template = self.head_spike_template(template)
+        search = self.head_spike_search(search)
 
         N_template = 64
         N_search = 256
@@ -300,7 +312,7 @@ class Cross_MS_Attention_linear(nn.Module):
         k_template = k_template.flatten(3)
         k_template = (
             k_template.transpose(-1, -2)
-            .reshape(T, B, N_template, self.num_heads, C // self.num_heads)
+            .reshape(T * T, B, N_template, self.num_heads, C // self.num_heads)
             .permute(0, 1, 3, 2, 4)
             .contiguous()
         )
@@ -309,18 +321,17 @@ class Cross_MS_Attention_linear(nn.Module):
         v_template = v_template.flatten(3)
         v_template = (
             v_template.transpose(-1, -2)
-            .reshape(T, B, N_template, self.num_heads, self.C_v // self.num_heads)
+            .reshape(T * T, B, N_template, self.num_heads, self.C_v // self.num_heads)
             .permute(0, 1, 3, 2, 4)
             .contiguous()
         )
 
         q_search = self.q_conv(search)
-
         q_search = self.q_spike_search(q_search)
         q_search = q_search.flatten(3)
         q_search = (
             q_search.transpose(-1, -2)
-            .reshape(T, B, N_search, self.num_heads, C // self.num_heads)
+            .reshape(T * T, B, N_search, self.num_heads, C // self.num_heads)
             .permute(0, 1, 3, 2, 4)
             .contiguous()
         )
@@ -328,10 +339,10 @@ class Cross_MS_Attention_linear(nn.Module):
         if self.bidirectional:
             q_template = self.q_conv(template)
             q_template = self.q_spike_template(q_template)
-            q_template = q_template.flatten(3)  # [T, B, 256, 64]
+            q_template = q_template.flatten(3)
             q_template = (
-                q_template.transpose(-1, -2)  # [T, B, N, C]
-                .reshape(T, B, N_template, self.num_heads, C // self.num_heads)
+                q_template.transpose(-1, -2)
+                .reshape(T * T, B, N_template, self.num_heads, C // self.num_heads)
                 .permute(0, 1, 3, 2, 4)
                 .contiguous()
             )
@@ -343,7 +354,7 @@ class Cross_MS_Attention_linear(nn.Module):
             k_search = k_search.flatten(3)
             k_search = (
                 k_search.transpose(-1, -2)
-                .reshape(T, B, N_search, self.num_heads, C // self.num_heads)
+                .reshape(T * T, B, N_search, self.num_heads, C // self.num_heads)
                 .permute(0, 1, 3, 2, 4)
                 .contiguous()
             )
@@ -352,29 +363,54 @@ class Cross_MS_Attention_linear(nn.Module):
             v_search = v_search.flatten(3)
             v_search = (
                 v_search.transpose(-1, -2)
-                .reshape(T, B, N_search, self.num_heads, self.C_v // self.num_heads)
+                .reshape(T * T, B, N_search, self.num_heads, self.C_v // self.num_heads)
                 .permute(0, 1, 3, 2, 4)
                 .contiguous()
             )
+
             search_kv = k_search.transpose(-2, -1) @ v_search
-            template = q_template @ search_kv * (self.scale * 2)  # (T, B, num_head, N, C)
+            template_out = q_template @ search_kv * (self.scale * 2)
         else:
-            template = v_template
+            template_out = v_template
 
         template_kv = k_template.transpose(-2, -1) @ v_template
-        search = q_search @ template_kv * (self.scale * 2)  # # (T, B, num_head, N, C)
+        search_out = q_search @ template_kv * (self.scale * 2)
 
-        x = torch.cat([template, search], dim=3)
-        _, _, _, _, C_padding = x.shape
-        padding = torch.zeros((T, B, self.num_heads, 4, C_padding), device=x.device, dtype=x.dtype)
-        x = torch.cat((x, padding), dim=3)
+        # Temporal aggregation over all template times for each search time
+        search_out = search_out.reshape(T, T, B, self.num_heads, N_search, self.C_v // self.num_heads)
+        search_logits = search_out.mean(dim=(-1, -2, -3))  # [T, T, B]
+        search_weights = torch.softmax(search_logits, dim=1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+        search_out = (search_out * search_weights).sum(dim=1)  # [T, B, heads, N_search, Cv//heads]
 
-        x = x.transpose(2, 3).reshape(T, B, self.C_v, N).contiguous()
-        x = self.attn_spike(x)
-        x = x.reshape(T, B, self.C_v, H, W)
-        x = self.proj_conv(x).reshape(T, B, C, H, W)
+        template_out = template_out.reshape(T, T, B, self.num_heads, N_template, self.C_v // self.num_heads)
+        if self.bidirectional:
+            template_logits = template_out.mean(dim=(-1, -2, -3))
+            template_weights = torch.softmax(template_logits, dim=0).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+            template_out = (template_out * template_weights).sum(dim=0)
+        else:
+            # keep diagonal correspondence for template branch
+            template_out = template_out[0]
 
-        return x
+        search_patch = search_out.permute(0, 1, 4, 2, 3).reshape(T, B, self.C_v, 16, 16)
+        template_patch = template_out.permute(0, 1, 4, 2, 3).reshape(T, B, self.C_v, 8, 8)
+
+        search_patch = self.search_attn_spike(search_patch)
+        template_patch = self.template_attn_spike(template_patch)
+
+        search_patch = self.search_proj_conv(search_patch)
+        template_patch = self.template_proj_conv(template_patch)
+
+        search_token = search_patch.flatten(3)  # [T, B, C, 256]
+        template_token = template_patch.flatten(3)  # [T, B, C, 64]
+
+        out_main = torch.cat([search_token, template_token], dim=3)  # [T, B, C, 320]
+
+        pad_token = x_flat[..., 320:]  # preserve the last 4 appendix tokens
+        out = torch.cat([out_main, pad_token], dim=3)  # [T, B, C, 324]
+        out = out.reshape(T, B, C, H, W)
+
+        return out
+
 
 class MAS_Cross_Attention_linear(nn.Module):
     def __init__(self, t: int, dim: int, num_heads=8, lambda_ratio=1, bidirectional=False, neuron_factory=None):
