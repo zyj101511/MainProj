@@ -126,14 +126,14 @@ if __name__ == '__main__':
                            scale_factor=4, scale_jitter_factor=0.5, ctr_jitter_factor=0.2)
 
     from torch.utils.data._utils.collate import default_collate
-    def mas_collate(batch):
+    def mis_collate(batch):
         batch = default_collate(batch)
         batch['search'] = batch['search'].permute(1, 2, 0, 4, 5, 3).contiguous()  # (L, T, B, H, W, C)
         batch['template'] = batch['template'].permute(1, 2, 0, 4, 5, 3).contiguous()  # (L, T, B, H, W, C)
         batch['search_anno'] = batch['search_anno'].permute(1, 0, 2).contiguous()  # (L, B, 4)
         return batch
     batch_sampler = TrackingPredSampler(dataset, 1, 100, T=1)
-    train_loader = DataLoader(dataset=dataset, batch_sampler=batch_sampler, collate_fn=mas_collate)
+    train_loader = DataLoader(dataset=dataset, batch_sampler=batch_sampler, collate_fn=mis_collate)
     batch = next(iter(train_loader))
     print(batch.keys())
     print(len(batch))

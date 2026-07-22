@@ -245,6 +245,157 @@ class Cross_MS_Attention_linear(nn.Module):
             nn.Conv2d(dim, dim, 1, 1, bias=False),
             nn.BatchNorm2d(dim)
         )
+
+        self.q_spike_search = self.neuron_factory(t=t)
+
+        self.k_conv = SeqToANNContainer(
+            nn.Conv2d(dim, dim, 1, 1, bias=False),
+            nn.BatchNorm2d(dim)
+        )
+
+        self.k_spike_template = self.neuron_factory(t=t)
+
+        self.v_conv = SeqToANNContainer(
+            nn.Conv2d(dim, int(dim * lambda_ratio), 1, 1, bias=False),
+            nn.BatchNorm2d(int(dim * lambda_ratio))
+        )
+
+        self.v_spike_template = self.neuron_factory(t=t)
+
+        if self.bidirectional:
+            self.q_spike_template = self.neuron_factory(t=t)
+            self.k_spike_search = self.neuron_factory(t=t)
+            self.v_spike_search = self.neuron_factory(t=t)
+
+        self.attn_spike = self.neuron_factory(t=t)
+
+        self.proj_conv = SeqToANNContainer(
+            nn.Conv2d(dim * lambda_ratio, dim, 1, 1, bias=False),
+            nn.BatchNorm2d(dim)
+        )
+
+    def forward(self, x):
+        T, B, C, H, W = x.shape  # [T, B, 256, 18, 18]
+        N = H * W
+
+        x = x.flatten(3)  # [T, B, 256, 324]
+        x = x[..., :320]  # [T, B, 256, 320]
+
+        search = x[..., :256]  # [T, B, 256, 256]
+        template = x[..., 256:320]  # [T, B, 256, 64]
+
+        template = template.reshape(T, B, C, 8, 8)
+        search = search.reshape(T, B, C, 16, 16)
+
+        template = self.head_spike_template(template)  # [T, B, 256, 8, 8]
+        search = self.head_spike_search(search)  # [T, B, 256, 16, 16]
+
+        N_template = 64
+        N_search = 256
+
+        k_template = self.k_conv(template)
+        v_template = self.v_conv(template)
+
+        k_template = self.k_spike_template(k_template)
+        k_template = k_template.flatten(3)
+        k_template = (
+            k_template.transpose(-1, -2)
+            .reshape(T, B, N_template, self.num_heads, C // self.num_heads)
+            .permute(0, 1, 3, 2, 4)
+            .contiguous()
+        )
+
+        v_template = self.v_spike_template(v_template)
+        v_template = v_template.flatten(3)
+        v_template = (
+            v_template.transpose(-1, -2)
+            .reshape(T, B, N_template, self.num_heads, self.C_v // self.num_heads)
+            .permute(0, 1, 3, 2, 4)
+            .contiguous()
+        )
+
+        q_search = self.q_conv(search)
+
+        q_search = self.q_spike_search(q_search)
+        q_search = q_search.flatten(3)
+        q_search = (
+            q_search.transpose(-1, -2)
+            .reshape(T, B, N_search, self.num_heads, C // self.num_heads)
+            .permute(0, 1, 3, 2, 4)
+            .contiguous()
+        )
+
+        if self.bidirectional:
+            q_template = self.q_conv(template)
+            q_template = self.q_spike_template(q_template)
+            q_template = q_template.flatten(3)  # [T, B, 256, 64]
+            q_template = (
+                q_template.transpose(-1, -2)  # [T, B, N, C]
+                .reshape(T, B, N_template, self.num_heads, C // self.num_heads)
+                .permute(0, 1, 3, 2, 4)
+                .contiguous()
+            )
+
+            k_search = self.k_conv(search)
+            v_search = self.v_conv(search)
+
+            k_search = self.k_spike_search(k_search)
+            k_search = k_search.flatten(3)
+            k_search = (
+                k_search.transpose(-1, -2)
+                .reshape(T, B, N_search, self.num_heads, C // self.num_heads)
+                .permute(0, 1, 3, 2, 4)
+                .contiguous()
+            )
+
+            v_search = self.v_spike_search(v_search)
+            v_search = v_search.flatten(3)
+            v_search = (
+                v_search.transpose(-1, -2)
+                .reshape(T, B, N_search, self.num_heads, self.C_v // self.num_heads)
+                .permute(0, 1, 3, 2, 4)
+                .contiguous()
+            )
+            search_kv = k_search.transpose(-2, -1) @ v_search
+            template = q_template @ search_kv * (self.scale * 2)  # (T, B, num_head, N, C)
+        else:
+            template = v_template
+
+        template_kv = k_template.transpose(-2, -1) @ v_template
+        search = q_search @ template_kv * (self.scale * 2)  # # (T, B, num_head, N, C)
+
+        x = torch.cat([template, search], dim=3)
+        _, _, _, _, C_padding = x.shape
+        padding = torch.zeros((T, B, self.num_heads, 4, C_padding), device=x.device, dtype=x.dtype)
+        x = torch.cat((x, padding), dim=3)
+
+        x = x.transpose(2, 3).reshape(T, B, self.C_v, N).contiguous()
+        x = self.attn_spike(x)
+        x = x.reshape(T, B, self.C_v, H, W)
+        x = self.proj_conv(x).reshape(T, B, C, H, W)
+
+        return x
+
+class Cross_Attention_linear(nn.Module):
+    def __init__(self, t: int, dim: int, num_heads=8, lambda_ratio=1, bidirectional=False, neuron_factory=None):
+        super().__init__()
+        assert (dim % num_heads == 0), f"dim {dim} should be divided by num_heads {num_heads}."
+        self.neuron_factory = neuron_factory
+        self.dim = dim
+        self.num_heads = num_heads
+        self.scale = (dim // num_heads) ** -0.5
+        self.lambda_ratio = lambda_ratio
+        self.bidirectional = bidirectional
+        self.C_v = int(dim * self.lambda_ratio)
+        assert self.C_v % self.num_heads == 0
+
+        self.head_spike_search = self.neuron_factory(t=t)
+        self.head_spike_template = self.neuron_factory(t=t)
+
+        self.q_conv = SeqToANNContainer(
+            nn.Conv2d(dim, dim, 1, 1, bias=False),
+            nn.BatchNorm2d(dim)
+        )
         self.q_spike_search = self.neuron_factory(t=t)
 
         self.k_conv = SeqToANNContainer(
@@ -412,7 +563,7 @@ class Cross_MS_Attention_linear(nn.Module):
         return out
 
 
-class MAS_Cross_Attention_linear(nn.Module):
+class MIS_Cross_Attention_linear(nn.Module):
     def __init__(self, t: int, dim: int, num_heads=8, lambda_ratio=1, bidirectional=False, neuron_factory=None):
         super().__init__()
         assert (dim % num_heads == 0), f"dim {dim} should be divided by num_heads {num_heads}."
@@ -607,7 +758,7 @@ class MS_Block_Spike_AttnMLP(nn.Module):
                 neuron_factory=self.neuron_factory
             )
         else:
-            self.attn = Cross_MS_Attention_linear(
+            self.attn = Cross_Attention_linear(
                 t=t,
                 dim=dim,
                 num_heads=num_heads,
@@ -627,13 +778,13 @@ class MS_Block_Spike_AttnMLP(nn.Module):
 
         return x  # (T, B, C, H, W)
 
-class MAS_AttnMLP(nn.Module):
+class MIS_AttnMLP(nn.Module):
     def __init__(self, t: int, dim: int, num_heads, mlp_ratio=4, lambda_ratio=4, bidirectional=False, neuron_factory=None):
         super().__init__()
         self.neuron_factory = neuron_factory
         # self.conv = SepConv_Spike(dim=dim, kernel_size=3, padding=1)
 
-        self.attn = MAS_Cross_Attention_linear(
+        self.attn = MIS_Cross_Attention_linear(
             t=t,
             dim=dim,
             num_heads=num_heads,

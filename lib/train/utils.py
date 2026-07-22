@@ -1,6 +1,6 @@
 import torch
-from lib.train.data.loader import MASLoader
-from lib.train.data.loader import mas_collate
+from lib.train.data.loader import MISLoader
+from lib.train.data.loader import mis_collate
 from lib.utils.misc import is_main_process
 from lib.train.data.dataset import FE108Dataset
 from lib.train.data.dataset_plain import FE108Dataset as FE108DatasetPlain
@@ -88,8 +88,8 @@ def build_train_loader(cfg, dataset, settings):
     batch_sampler = DistributedTrackingPredSampler(dataset, settings.batchsize, samples_per_epoch,
                                         L_candidates, P=P, distance_factor=df, T=T)
 
-    train_loader = MASLoader(name='train', training=True, dataset=dataset, batch_sampler=batch_sampler,
-                       collate_fn=mas_collate, batch_dim=2, num_workers=cfg.TRAIN.NUM_WORKERS, epoch_interval=1)
+    train_loader = MISLoader(name='train', training=True, dataset=dataset, batch_sampler=batch_sampler,
+                       collate_fn=mis_collate, batch_dim=2, num_workers=cfg.TRAIN.NUM_WORKERS, epoch_interval=1)
     return train_loader
 
 def build_train_loader_plain(cfg, dataset, settings):
@@ -100,8 +100,8 @@ def build_train_loader_plain(cfg, dataset, settings):
 
     batch_sampler = DistributedTrackingPredSamplerPlain(dataset, settings.batchsize, samples_per_epoch, T=T)
 
-    train_loader = MASLoader(name='train', training=True, dataset=dataset, batch_sampler=batch_sampler,
-                       collate_fn=mas_collate, batch_dim=2, num_workers=cfg.TRAIN.NUM_WORKERS, epoch_interval=1)
+    train_loader = MISLoader(name='train', training=True, dataset=dataset, batch_sampler=batch_sampler,
+                       collate_fn=mis_collate, batch_dim=2, num_workers=cfg.TRAIN.NUM_WORKERS, epoch_interval=1)
     return train_loader
 
 def build_train_loader_pp(cfg, dataset, settings):
@@ -112,8 +112,8 @@ def build_train_loader_pp(cfg, dataset, settings):
 
     batch_sampler = DistributedTrackingSamplerPP(dataset, settings.batchsize, samples_per_epoch, T=T)
 
-    train_loader = MASLoader(name='train', training=True, dataset=dataset, batch_sampler=batch_sampler,
-                       collate_fn=mas_collate, batch_dim=2, num_workers=cfg.TRAIN.NUM_WORKERS, epoch_interval=1)
+    train_loader = MISLoader(name='train', training=True, dataset=dataset, batch_sampler=batch_sampler,
+                       collate_fn=mis_collate, batch_dim=2, num_workers=cfg.TRAIN.NUM_WORKERS, epoch_interval=1)
     return train_loader
 
 
@@ -148,7 +148,7 @@ def get_optimizer_scheduler(net, cfg):
 
 if __name__ == '__main__':
     from lib.config.loader import load_from_yaml
-    cfg = load_from_yaml('/experiments/01_fe108_mastrack.yaml')
+    cfg = load_from_yaml('/experiments/01_fe108_mistrack.yaml')
     from easydict import EasyDict
     settings = EasyDict()
     settings.env = EasyDict()

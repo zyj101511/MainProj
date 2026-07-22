@@ -6,15 +6,15 @@ from lib.utils.tensor_ds import TensorDict, TensorList
 from torch.utils.data._utils.collate import default_collate
 
 
-def mas_collate(batch):
+def mis_collate(batch):
     batch = default_collate(batch)
     batch['search'] = batch['search'].permute(1, 2, 0, 3, 4, 5).contiguous()
     batch['template'] = batch['template'].permute(1, 2, 0, 3, 4, 5).contiguous()  # (L, T, B, C, H, W)
     return batch
 
-class MASLoader(torch.utils.data.dataloader.DataLoader):
+class MISLoader(torch.utils.data.dataloader.DataLoader):
     def __init__(self, name, dataset, training=True,batch_size=None, shuffle=False, sampler=None,
-                 epoch_interval=1, batch_sampler=None, num_workers=0, collate_fn=mas_collate,
+                 epoch_interval=1, batch_sampler=None, num_workers=0, collate_fn=mis_collate,
                  pin_memory=False, drop_last=False, timeout=0, worker_init_fn=None, batch_dim=2):
         if batch_sampler is not None:
             super().__init__(

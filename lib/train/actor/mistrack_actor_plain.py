@@ -4,8 +4,8 @@ from lib.train.actor.base_actor import BaseActor
 from lib.utils.box_ops import box_cxcywh_to_xyxy, box_xywh_to_xyxy, box_xywh_to_cxcywh, box_xyxy_to_xywh
 from lib.utils.heapmap_utils import generate_heatmap
 
-class MASTrackActor(BaseActor):
-    """ Actor for training MASTrack models """
+class MISTrackActor(BaseActor):
+    """ Actor for training MISTrack models """
     def __init__(self, net, objective, loss_weight, cfg):
         super().__init__(net, objective)
         self.loss_weight = loss_weight
@@ -152,11 +152,11 @@ if __name__ == '__main__':
             'decay_factor': 0.8,
         }
     }
-    from lib.models.mastrack import build_model
+    from lib.models.mistrack import build_model
     from lib.config.loader import load_from_yaml
-    cfg = load_from_yaml('/experiments/01_fe108_mastrack.yaml')
+    cfg = load_from_yaml('/experiments/01_fe108_mistrack.yaml')
     net = build_model(cfg, training=False).to(device)
-    actor = MASTrackActor(net=net, objective=objective,
+    actor = MISTrackActor(net=net, objective=objective,
                           loss_weight=loss_weight, cfg=cfg)
 
     search = torch.randn(T, B, C, H, W, device=device)

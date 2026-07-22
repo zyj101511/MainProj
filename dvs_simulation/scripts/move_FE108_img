@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 python3 ../scripts_py/move_img.py \
-        --img_dir /media/yanjiezhang/ian/dataset/FE108_aedat4_to_nbinsGTP \
-        --out_dir /media/yanjiezhang/ian/dataset/FE108 \
-        --file_type png
+        --img_dir /media/yanjiezhang/ian/dataset/FE108 \
+        --out_dir /home/yanjiezhang/Downloads/Dissertation/dataset/FE108 \
+        --file_type png \
+        --folder_name imgs_FCTP

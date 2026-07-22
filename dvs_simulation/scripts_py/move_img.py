@@ -3,14 +3,14 @@ import shutil
 from tqdm import tqdm
 import argparse
 
-def processing(img_dir, out_dir, file_type):
+def processing(img_dir, out_dir, file_type, folder_name):
     img_dir = Path(img_dir)
     out_dir = Path(out_dir)
 
     all_roots = []
 
     for root in img_dir.rglob("*"):  # 返回所有item, 有文件夹有文件
-        if root.is_dir():  # 只查看文件夹
+        if root.is_dir() and root.name == folder_name:  # 只查看文件夹
             img_paths = list(root.glob(f"*.{file_type}"))
             if img_paths:
                 all_roots.append(root)
@@ -31,9 +31,10 @@ def main():
     parser.add_argument('--img_dir', required=True, help='path to the original dataset')
     parser.add_argument('--out_dir', required=True, help='path to the new dataset')
     parser.add_argument('--file_type', default='jpg', type=str, help='path to the new dataset')
+    parser.add_argument('--folder_name', default='imgs_FCTP', type=str, help='folder name to move (default: imgs_FCTP)')
 
     args = parser.parse_args()
-    processing(args.img_dir, args.out_dir, args.file_type)
+    processing(args.img_dir, args.out_dir, args.file_type, args.folder_name)
 
 if __name__ == "__main__":
     main()

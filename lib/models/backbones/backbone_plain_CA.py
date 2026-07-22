@@ -67,7 +67,7 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
             neuron_factory=self.neuron_factory
         )
 
-        self.mas_attnmlp_1 = MAS_AttnMLP(
+        self.mis_attnmlp_1 = MIS_AttnMLP(
             t=t,
             dim=embed_dim[1],
             num_heads=num_heads,
@@ -97,7 +97,7 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
             neuron_factory=self.neuron_factory
         )
 
-        self.mas_attnmlp_2 = MAS_AttnMLP(
+        self.mis_attnmlp_2 = MIS_AttnMLP(
             t=t,
             dim=embed_dim[2],
             num_heads=num_heads,
@@ -134,7 +134,7 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
             neuron_factory=self.neuron_factory
         )
 
-        self.mas_attnmlp_3 = MS_Block_Spike_AttnMLP(
+        self.mis_attnmlp_3 = MS_Block_Spike_AttnMLP(
             t=t,
             dim=embed_dim[3],
             num_heads=num_heads,
@@ -226,7 +226,7 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
             x = blk(x)
 
         x = self.downsample2(x)
-        x = self.mas_attnmlp_1(x)
+        x = self.mis_attnmlp_1(x)
 
         for blk in self.ConvBlock2_1:
             x = blk(x)
@@ -234,7 +234,7 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
             x = blk(x)
 
         x = self.downsample3(x)
-        x = self.mas_attnmlp_2(x)
+        x = self.mis_attnmlp_2(x)
 
         return x
 
@@ -273,7 +273,7 @@ class Spiking_vit_MetaFormer_Spike_SepConv(nn.Module):
 
         cat_feat = cat_feat.reshape(T, B, C, math.isqrt(N), math.isqrt(N))
 
-        cat_feat = self.mas_attnmlp_3(cat_feat)  # [T, B, 320, 18, 18]
+        cat_feat = self.mis_attnmlp_3(cat_feat)  # [T, B, 320, 18, 18]
 
         for blk in self.block4:
             cat_feat = blk(cat_feat)

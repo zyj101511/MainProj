@@ -4,13 +4,13 @@ import os
 import numpy as np
 from setuptools._distutils.compilers.C import unix
 
-from lib.models.mastrack import build_model
+from lib.models.mistrack import build_model
 from lib.test.tracker.basetracker import BaseTracker
 from lib.utils.box_ops import clip_box_tensor
 from lib.test.data.utils.preprocessing_utils import crop_template, get_search_box, crop_search
 
 
-class MASTracker(BaseTracker):
+class MISTracker(BaseTracker):
     def __init__(self, settings):
         super().__init__(settings)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

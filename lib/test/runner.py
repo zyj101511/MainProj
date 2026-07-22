@@ -6,13 +6,13 @@ import numpy as np
 from pydantic._internal import _namespace_utils
 from tqdm import tqdm
 
-from lib.test.tracker.mastracker import MASTracker
+from lib.test.tracker.mistracker import MISTracker
 
 
-class MASTrackRunner:
+class MISTrackRunner:
     """wrapper the tracker for testing"""
     def __init__(self, dataset, settings):
-        self.tracker = MASTracker(settings)
+        self.tracker = MISTracker(settings)
         self.dataset = dataset
         self.settings = settings
         self.cfg = settings.cfg
@@ -103,10 +103,10 @@ if __name__ == '__main__':
     from lib.test.data.dataset import FE108Dataset
     from lib.config.loader import load_from_yaml
     settings = Settings(training=False)
-    settings.cfg = load_from_yaml("/home/yanjiezhang/Downloads/Dissertation/MainProj/experiments/fe108_mastrack.yaml")
+    settings.cfg = load_from_yaml("/home/yanjiezhang/Downloads/Dissertation/MainProj/experiments/fe108_mistrack.yaml")
 
     dataset = FE108Dataset(settings.env.fe108_dir, split='test', T=1)
-    runner = MASTrackRunner(dataset, settings)
+    runner = MISTrackRunner(dataset, settings)
     runner.run_dataset()
 
 

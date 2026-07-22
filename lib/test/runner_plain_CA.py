@@ -4,13 +4,13 @@ import time
 import numpy as np
 from tqdm import tqdm
 
-from lib.test.tracker.mastracker_plain_CA import MASTracker
+from lib.test.tracker.mistracker_plain_CA import MISTracker
 
 
-class MASTrackRunnerPlain:
+class MISTrackRunnerPlain:
     """wrapper the tracker for testing"""
     def __init__(self, dataset, settings):
-        self.tracker = MASTracker(settings)
+        self.tracker = MISTracker(settings)
         self.dataset = dataset
         self.settings = settings
         self.cfg = settings.cfg
@@ -100,10 +100,10 @@ if __name__ == '__main__':
     from lib.test.data.dataset import FE108Dataset
     from lib.config.loader import load_from_yaml
     settings = Settings(training=False)
-    settings.cfg = load_from_yaml("/home/yanjiezhang/Downloads/Dissertation/MainProj/experiments/fe108_mastrack.yaml")
+    settings.cfg = load_from_yaml("/home/yanjiezhang/Downloads/Dissertation/MainProj/experiments/fe108_mistrack.yaml")
 
     dataset = FE108Dataset(settings.env.fe108_dir, split='test', T=1)
-    runner = MASTrackRunnerPlain(dataset, settings)
+    runner = MISTrackRunnerPlain(dataset, settings)
     # runner.run_dataset()
     runner.run_sequence(1)
 

@@ -1,8 +1,8 @@
 import os
 from torch import nn
-from lib.models.mastrack_plain_CA import build_model
-from lib.train.trainer.mastrack_trainer import MASTrainer
-from lib.train.actor.mastrack_actor_plain import MASTrackActor
+from lib.models.mistrack_plain_CA import build_model
+from lib.train.trainer.mistrack_trainer import MISTrainer
+from lib.train.actor.mistrack_actor_plain import MISTrackActor
 from lib.utils.box_ops import giou_loss
 from torch.nn.functional import l1_loss
 from lib.utils.focal_loss import FocalLoss
@@ -79,7 +79,7 @@ def run(settings):
                                   'near_future_loss': cfg.TRAIN.LOSS.NEAR_FUTURE_WEIGHT,
                                   'distant_future_loss': cfg.TRAIN.LOSS.DISTANT_FUTURE_WEIGHT,
                                   'total': cfg.TRAIN.LOSS.TRAJECTORY_WEIGHT},}
-    actor = MASTrackActor(net=net, objective=objective, loss_weight=loss_weight, cfg=cfg)
+    actor = MISTrackActor(net=net, objective=objective, loss_weight=loss_weight, cfg=cfg)
 
     optimizer, lr_scheduler = get_optimizer_scheduler(net, cfg)
     print(f'\033[93moptimizer state:\033[0m:')
@@ -97,7 +97,7 @@ def run(settings):
     print("\t\033[93mstate_dict:\033[0m", lr_scheduler.state_dict())
 
     use_amp = getattr(cfg.TRAIN, "AMP", False)
-    trainer = MASTrainer(actor=actor,
+    trainer = MISTrainer(actor=actor,
                          loaders=loaders,
                          optimizer=optimizer,
                          lr_scheduler=lr_scheduler,

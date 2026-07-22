@@ -8,7 +8,7 @@ from lib.train.trainer.base_trainer import BaseTrainer
 from lib.train.admin.stats import AverageMeter, StatValue
 from lib.train.admin.tensorboard import TensorboardWriter
 
-class MASTrainer(BaseTrainer):
+class MISTrainer(BaseTrainer):
     def __init__(self, actor, loaders, optimizer, settings, lr_scheduler=None, use_amp=False):
         """
         args:

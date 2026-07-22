@@ -150,7 +150,7 @@ if __name__ == '__main__':
     L_candidates = [100]
 
     from torch.utils.data._utils.collate import default_collate
-    def mas_collate(batch):
+    def mis_collate(batch):
         batch = default_collate(batch)
         batch['search'] = batch['search'].permute(1, 2, 0, 4, 5, 3).contiguous()  # (L, T, B, H, W, C)
         batch['template'] = batch['template'].permute(1, 2, 0, 4, 5, 3).contiguous()  # (L, T, B, H, W, C)
@@ -158,7 +158,7 @@ if __name__ == '__main__':
         return batch
     batch_sampler = TrackingPredSampler(dataset, 1, 100,
                                         L_candidates, P=10, distance_factor=20, T=1)
-    train_loader = DataLoader(dataset=dataset, batch_sampler=batch_sampler, collate_fn=mas_collate)
+    train_loader = DataLoader(dataset=dataset, batch_sampler=batch_sampler, collate_fn=mis_collate)
     batch = next(iter(train_loader))
     print(batch.keys())
     print(len(batch))
